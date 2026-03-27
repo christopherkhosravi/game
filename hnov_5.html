@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>HNOV</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:#0a0a14;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:100vh;font-family:'Courier New',monospace;overflow:hidden;
+  user-select:none;
+}
+#wrap{position:relative;}
+#gameCanvas{
+  display:block;
+  image-rendering:pixelated;
+  border:2px solid #1a1a2e;
+  box-shadow:0 0 0 1px #2a1a4e, 0 0 60px #1a0a3e88, 0 0 120px #0a0a2422;
+}
+#hud{
+  display:flex;justify-content:space-between;align-items:center;
+  width:100%;padding:4px 2px;margin-bottom:4px;
+  color:#6a5acd;font-size:11px;letter-spacing:2px;
+}
+#hudLeft{display:flex;gap:16px;}
+#abilityBar{display:flex;gap:6px;align-items:center;}
+.abilityPip{
+  width:8px;height:8px;border-radius:50%;
+  background:#6a5acd;transition:background 0.1s;
+}
+.abilityPip.used{background:#1a1a2e;border:1px solid #3a2a6e;}
+.abilityPip.charging{background:#ff6b9d;}
+#floatMeter{
+  width:40px;height:6px;background:#1a1a2e;border:1px solid #3a2a6e;
+  display:inline-block;vertical-align:middle;
+}
+#floatFill{height:100%;background:#6a5acd;transition:width 0.05s;}
+#controls{
+  margin-top:6px;color:#2a1a4e;font-size:10px;
+  letter-spacing:1px;text-align:center;line-height:2;
+}
+#controls span{color:#3a2a5e;}
+#overlay{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(10,10,20,0.88);
+  transition:opacity 0.3s;
+}
+#overlay.hidden{display:none;}
+#overlayInner{
+  border:2px solid #6a5acd;padding:32px 44px;text-align:center;
+  background:#0d0d1e;position:relative;
+}
+#overlayInner::before{
+  content:'';position:absolute;inset:-6px;border:1px solid #3a2a6e;pointer-events:none;
+}
+#overlayTitle{color:#e8d8ff;font-size:32px;letter-spacing:10px;margin-bottom:6px;}
+#overlayName{color:#6a5acd;font-size:12px;letter-spacing:6px;margin-bottom:20px;}
+#overlayMsg{color:#9a8acd;font-size:11px;letter-spacing:2px;line-height:2;margin-bottom:24px;}
+#overlayBtn{
+  background:transparent;color:#e8d8ff;border:2px solid #6a5acd;
+  font-family:'Courier New',monospace;font-size:13px;letter-spacing:4px;
+  padding:10px 28px;cursor:pointer;text-transform:uppercase;
+  transition:all 0.15s;
+}
+#overlayBtn:hover{background:#6a5acd;color:#0a0a14;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud">
+    <div id="hudLeft">
+      <span>HNOV</span>
+      <span id="hudState">IDLE</span>
+      <span style="font-size:10px;letter-spacing:1px;margin-left:12px;margin-right:4px;">FLOAT</span>
+      <div id="floatMeter"><div id="floatFill" style="width:100%"></div></div>
+    </div>
+    <div id="abilityBar">
+      <span style="font-size:10px;letter-spacing:1px;margin-right:2px;">DASH</span>
+      <div class="abilityPip" id="pip0"></div>
+    </div>
+  </div>
+  <canvas id="gameCanvas" width="1680" height="945"></canvas>
+  <div id="overlay">
+    <div id="overlayInner">
+      <div id="overlayTitle">HNOV</div>
+      <div id="overlayName">a movement story</div>
+      <div id="overlayMsg">
+        ARROWS / WASD · move<br>
+        SPACE · jump · SPACE again (air) · bounce<br>
+        Q · dash left · E · dash right (recharges on land)<br>
+        S / DOWN (air) · float (hold to glide)<br>
+        INTO WALL · wall slide &amp; sit<br>
+        JUMP off wall · wall jump
+      </div>
+      <button id="overlayBtn">BEGIN</button>
+    </div>
+  </div>
+</div>
+<div id="controls">
+  <span>Q</span> DASH LEFT &nbsp;·&nbsp; <span>E</span> DASH RIGHT &nbsp;·&nbsp; <span>SPACE SPACE</span> BOUNCE &nbsp;·&nbsp; <span>S/↓</span> FLOAT &nbsp;·&nbsp; <span>R</span> RESTART
+</div>
+
+<script>
+// ─── CANVAS & CTX ────────────────────────────────────────────────────────────
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+const CW = 1680, CH = 945;
+
+// ─── PALETTE ─────────────────────────────────────────────────────────────────
+const P = {
+  bg0:     '#0a0a14',
+  bg1:     '#0d0d1e',
+  bg2:     '#12122a',
+  plat1:   '#1e1e3a',
+  plat2:   '#2a2a4e',
+  platTop: '#6a5acd',
+  platGlow:'#3a2a8e',
+  wind:    '#1a3a5e',
+  windFg:  '#4a8acd',
+  hazard:  '#3e1a1a',
+  hazardFg:'#cd4a4a',
+  moving:  '#1e3a1e',
+  movTop:  '#4acd6a',
+  enemy:   '#3e1a3e',
+  enemyFg: '#cd4acd',
+  // Hnov sprite
+  h1:'#e8d8ff', // light
+  h2:'#b09aef', // mid
+  h3:'#6a5acd', // dark purple
+  h4:'#0a0a14', // outline
+  h5:'#ff6b9d', // accent pink
+  h6:'#ffd4e8', // skin
+  // effects
+  dashFx:  '#b09aef',
+  bumpFx:  '#6af0ff',
+  bounceFx:'#ffd4e8',
+  winFx:   '#e8d8ff',
+  particle:'#b09aef',
+};
+
+// ─── LEVEL ───────────────────────────────────────────────────────────────────
+const LW = 640, LH = 315;
+const GROUND_Y = 283;
+
+// static platforms {x,y,w,h,type:'solid'|'pass'}
+// U-shape arena: floor + full-height left/right walls + two interior floating platforms
+const staticPlats = [
+  {x:0,   y:GROUND_Y, w:640, h:32,         type:'solid'}, // floor
+  {x:0,   y:0,        w:16,  h:GROUND_Y+32, type:'solid'}, // left wall
+  {x:624, y:0,        w:16,  h:GROUND_Y+32, type:'solid'}, // right wall
+  {x:80,  y:215,      w:120, h:16,          type:'solid'}, // platform 1 (lower, left)
+  {x:400, y:165,      w:120, h:16,          type:'solid'}, // platform 2 (higher, right)
+];
+
+// moving platforms {x,y,w,h, ox,oy, dx,dy, range, t}
+const movingPlats = [];
+
+// wind zones {x,y,w,h, fx,fy}
+const windZones = [];
+
+// hazard gates {x,y,w,h, period, phase}
+const hazardGates = [];
+
+// rotating barriers {cx,cy,len,speed,angle}
+const rotBarriers = [
+];
+
+// patrol enemies {x,y,w,h, ox, range, speed, dir}
+// one stationary enemy on platform 2 (y:165), sitting on top: enemy.y+h=165
+const enemies = [
+  {x:430, y:147, w:18, h:18, ox:430, range:0, speed:0, dir:0},
+];
+
+// goal
+const GOAL = {x:260, y:GROUND_Y-60, w:24, h:60}; // on the floor, center of arena
+
+// quake radius (pushback on enemies)
+const QUAKE_RADIUS = 80;
+const QUAKE_PUSH   = 6;
+
+// ─── PHYSICS CONSTANTS ───────────────────────────────────────────────────────
+const RISE_G       = 0.11;  // moon-light float on the way up
+const FALL_G       = 0.28;  // drifts back down, not a drop
+const JUMP_FORCE   = -4.25;  // modest kick — gravity does the floaty work
+const MAX_FALL     = 8;     // never feels heavy
+const RUN_SPEED    = 2.0;   // deliberate, not zippy
+const FRICTION     = 0.88;  // air friction on vx when no input
+const COYOTE_F     = 8;
+const JUMP_BUF_F   = 10;
+// wall
+const WALL_SLIDE_G = 0.07;
+const WALL_JUMP_VX = 3.5;
+const WALL_JUMP_VY = -5.0;
+// dash — UNTOUCHED
+const DASH_SPEED   = 9;
+const DASH_FRAMES  = 12;
+const DASH_GRACE   = 4;     // frames of gravity immunity after dash
+// bounce — moderate upward pop, triggerable in air
+const BOUNCE_VY    = -3.5;  // modest height, not a rocket
+const BOUNCE_RISE_G = 0.11; // same as RISE_G — consistent moon feel
+// var jump (cut on release)
+const VAR_JUMP_CUT = 0.45;
+
+// ─── PLAYER ──────────────────────────────────────────────────────────────────
+function makePlayer() {
+  return {
+    x:40, y:240, w:12, h:16,
+    vx:0, vy:0,
+    onGround:false, wasOnGround:false,
+    facingRight:true,
+    // coyote & buffer
+    coyote:0, jumpBuf:0,
+    // wall
+    wallDir:0,       // -1 left wall, 1 right wall, 0 none
+    wallContact:false,
+    // abilities
+    dashAvail:true,
+    dashTimer:0,
+    dashDir:1,
+    dashGrace:0,
+    floating:false,
+    floatMeter:100,
+    justBounced:false,
+    bouncing:false,       // true during the upward bounce arc
+    jumpCount:0,          // 0=none, 1=jumped, 2=bounced
+    jumpHeld:false,
+    jumpCut:false,
+    // quake
+    quakeActive:false,
+    quakeTimer:0,
+    // state label
+    state:'idle',
+    // anim
+    animT:0,
+    animFrame:0,
+    // spawn
+    dead:false,
+    // afterimage for dash
+    afterImages:[],
+  };
+}
+let player = makePlayer();
+
+// ─── PARTICLES ───────────────────────────────────────────────────────────────
+let particles = [];
+function spawnParticles(x, y, color, count, vxRange, vyRange, life) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random()-0.5)*vxRange,
+      vy: (Math.random()-0.5)*vyRange - 1,
+      life, maxLife:life,
+      color,
+      size: Math.random()*3+1,
+    });
+  }
+}
+
+// ─── INPUT ───────────────────────────────────────────────────────────────────
+const keys = {};
+const justPressed = {};
+const justReleased = {};
+document.addEventListener('keydown', e => {
+  if (!keys[e.code]) justPressed[e.code] = true;
+  keys[e.code] = true;
+  if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+});
+document.addEventListener('keyup', e => {
+  keys[e.code] = false;
+  justReleased[e.code] = true;
+});
+function press(codes) { return codes.some(c => keys[c]); }
+function jp(codes)    { return codes.some(c => justPressed[c]); }
+function jr(codes)    { return codes.some(c => justReleased[c]); }
+function clearFrame() {
+  for (const k in justPressed)  delete justPressed[k];
+  for (const k in justReleased) delete justReleased[k];
+}
+
+// ─── CAMERA ──────────────────────────────────────────────────────────────────
+const cam = {x:0, y:0};
+function updateCamera() {
+  let tx = player.x - CW/4 + player.w/2;
+  let ty = player.y - CH/4 * 0.55;
+  tx = Math.max(0, Math.min(LW - CW/2, tx));
+  ty = Math.max(0, Math.min(LH - CH/2, ty));
+  cam.x += (tx - cam.x) * 0.1;
+  cam.y += (ty - cam.y) * 0.1;
+}
+
+// ─── COLLISION HELPERS ───────────────────────────────────────────────────────
+function rectsOverlap(ax,ay,aw,ah, bx,by,bw,bh) {
+  return ax < bx+bw && ax+aw > bx && ay < by+bh && ay+ah > by;
+}
+function allPlatforms() {
+  return [...staticPlats, ...movingPlats];
+}
+
+// resolve vertical collision — returns {landed, hitCeil}
+function resolveY(px, py, pw, ph, vy) {
+  let landed = false, hitCeil = false;
+  for (const p of allPlatforms()) {
+    if (px + pw <= p.x + 1 || px >= p.x + p.w - 1) continue;
+    const prevBottom = py + ph - vy;
+    const curBottom  = py + ph;
+    // landing on top
+    if (prevBottom <= p.y + 2 && curBottom >= p.y && vy >= 0) {
+      py = p.y - ph; vy = 0; landed = true;
+    }
+    // hitting ceiling (only solid)
+    if (p.type === 'solid') {
+      const prevTop = py - vy;
+      if (prevTop >= p.y + p.h - 2 && py <= p.y + p.h && vy < 0) {
+        py = p.y + p.h; vy = 0; hitCeil = true;
+      }
+    }
+  }
+  return {py, vy, landed, hitCeil};
+}
+
+// resolve horizontal — returns {px, vx, wallLeft, wallRight}
+function resolveX(px, py, pw, ph, vx) {
+  let wallLeft = false, wallRight = false;
+  for (const p of allPlatforms()) {
+    if (p.type !== 'solid') continue;
+    if (py + ph <= p.y + 2 || py >= p.y + p.h - 2) continue;
+    // right wall
+    if (px + pw > p.x && px + pw - vx <= p.x && vx > 0) {
+      px = p.x - pw; vx = 0; wallRight = true;
+    }
+    // left wall
+    if (px < p.x + p.w && px - vx >= p.x + p.w && vx < 0) {
+      px = p.x + p.w; vx = 0; wallLeft = true;
+    }
+  }
+  return {px, vx, wallLeft, wallRight};
+}
+
+// ─── GAME STATE ───────────────────────────────────────────────────────────────
+let gameState = 'title';
+let frame = 0;
+let winTimer = 0;
+let deathTimer = 0;
+let deadOverlayTimer = 0;
+let screenShake = 0;
+
+// ─── UPDATE ──────────────────────────────────────────────────────────────────
+function update() {
+  if (gameState !== 'playing') return;
+  frame++;
+
+  // — update moving platforms —
+  for (const mp of movingPlats) {
+    mp.t += 0.04;
+    mp.x = mp.ox + Math.sin(mp.t) * mp.dx * mp.range;
+    mp.y = mp.oy + Math.sin(mp.t) * mp.dy * mp.range;
+  }
+
+  // — update enemies —
+  for (const e of enemies) {
+    e.x += e.speed * e.dir;
+    if (e.x < e.ox || e.x > e.ox + e.range) e.dir *= -1;
+  }
+
+  // — update rot barriers —
+  for (const rb of rotBarriers) rb.angle += rb.speed;
+
+  const p = player;
+  if (p.dead) {
+    // advance dying animation at 1 frame per 60 game ticks (4 frames × 60 = 240 ticks = 4 s)
+    deathTimer++;
+    if (deathTimer % 60 === 0 && p.animFrame < 3) p.animFrame++;
+    if (deathTimer >= 240) { gameState = 'dead'; deadOverlayTimer = 0; }
+    return;
+  }
+
+  // — gather wind force —
+  let windFx = 0, windFy = 0;
+  for (const wz of windZones) {
+    if (rectsOverlap(p.x,p.y,p.w,p.h, wz.x,wz.y,wz.w,wz.h)) {
+      windFx += wz.fx; windFy += wz.fy;
+    }
+  }
+
+  // — inputs —
+  const left   = press(['ArrowLeft','KeyA']);
+  const right  = press(['ArrowRight','KeyD']);
+  const down   = press(['ArrowDown','KeyS']);
+  const jumpP  = jp(['Space','ArrowUp','KeyW']);
+  const jumpH  = press(['Space','ArrowUp','KeyW']);
+  const jumpR  = jr(['Space','ArrowUp','KeyW']);
+  const dashQP = jp(['KeyQ']);
+  const dashEP = jp(['KeyE']);
+  const restP  = jp(['KeyR']);
+
+  if (restP) { respawn(); return; }
+
+  // — dash — Q=left, E=right
+  if ((dashQP || dashEP) && p.dashAvail && p.dashTimer === 0) {
+    p.dashDir    = dashQP ? -1 : 1;
+    p.facingRight = dashQP ? false : true;
+    p.dashAvail  = false;
+    p.dashTimer  = DASH_FRAMES;
+    p.dashGrace  = DASH_FRAMES + DASH_GRACE;
+    p.floating   = false;
+    spawnParticles(p.x+p.w/2, p.y+p.h/2, P.dashFx, 10, 6, 4, 18);
+  }
+  if (p.dashTimer > 0) {
+    p.vx = p.dashDir * DASH_SPEED;
+    p.vy = 0;
+    p.dashTimer--;
+    // afterimage
+    p.afterImages.push({x:p.x, y:p.y, life:8, facingRight:p.facingRight});
+  }
+  if (p.dashGrace > 0) p.dashGrace--;
+  // — dash — UNTOUCHED BLOCK END
+
+  // — bump —
+  // — horizontal movement (only if not dashing) —
+  if (p.dashTimer <= 0) {
+    if (left)       { p.vx = -RUN_SPEED; p.facingRight = false; }
+    else if (right) { p.vx =  RUN_SPEED; p.facingRight = true;  }
+    else {
+      p.vx *= (p.onGround ? 0.7 : FRICTION);
+      if (Math.abs(p.vx) < 0.1) p.vx = 0;
+    }
+  }
+
+  // apply wind
+  p.vx += windFx;
+
+  // — float —
+  if (!p.onGround && p.dashTimer <= 0) {
+    if (down && p.floatMeter > 0) {
+      p.floating = true;
+    } else {
+      p.floating = false;
+    }
+    if (p.floating) {
+      p.floatMeter = Math.max(0, p.floatMeter - 1);
+    }
+  } else {
+    p.floating = false;
+  }
+
+  // — jump buffer —
+  if (jumpP) p.jumpBuf = JUMP_BUF_F;
+  else if (p.jumpBuf > 0) p.jumpBuf--;
+
+  // — coyote —
+  if (p.onGround) p.coyote = COYOTE_F;
+  else if (p.coyote > 0) p.coyote--;
+
+  // — wall detection (before move) —
+  let touchWallL = false, touchWallR = false;
+  for (const pl of allPlatforms()) {
+    if (pl.type !== 'solid') continue;
+    if (p.y + p.h <= pl.y + 2 || p.y >= pl.y + pl.h - 2) continue;
+    if (Math.abs((p.x) - (pl.x + pl.w)) < 3 && p.vx <= 0) touchWallL = true;
+    if (Math.abs((p.x + p.w) - pl.x) < 3   && p.vx >= 0) touchWallR = true;
+  }
+  p.wallContact = (touchWallL || touchWallR) && !p.onGround;
+  if (p.wallContact) {
+    p.wallDir = touchWallL ? -1 : 1;
+  } else {
+    p.wallDir = 0;
+  }
+
+  // — wall jump —
+  if (jumpP && p.wallContact && !p.onGround) {
+    p.vx = -p.wallDir * WALL_JUMP_VX;
+    p.vy = WALL_JUMP_VY;
+    p.coyote = 0; p.jumpBuf = 0;
+    p.jumpCount = 1;
+    spawnParticles(p.x + (p.wallDir > 0 ? p.w : 0), p.y+p.h/2, P.dashFx, 8, 5, 5, 14);
+  }
+  // — normal jump —
+  else if (p.jumpBuf > 0 && p.coyote > 0 && !p.wallContact) {
+    p.vy = JUMP_FORCE;
+    p.coyote = 0; p.jumpBuf = 0;
+    p.floating = false;
+    p.jumpCut = false;
+    p.jumpHeld = true;
+    p.jumpCount = 1;
+    spawnParticles(p.x+p.w/2, p.y+p.h, P.particle, 6, 4, 3, 10);
+  }
+  // — bounce: second SPACE in air —
+  else if (jumpP && !p.onGround && p.jumpCount === 1 && !p.bouncing) {
+    p.vy = BOUNCE_VY;
+    p.onGround = false;
+    p.bouncing = true;
+    p.jumpCount = 2;
+    p.floating = false;
+    screenShake = 5;
+    spawnParticles(p.x+p.w/2, p.y+p.h/2, P.bounceFx, 12, 5, 5, 18);
+    spawnParticles(p.x+p.w/2, p.y+p.h/2, P.h5, 6, 3, 3, 12);
+    for (const e of enemies) {
+      const dx = e.x - p.x;
+      if (Math.abs(dx) < QUAKE_RADIUS) {
+        e.dir = dx >= 0 ? 1 : -1;
+        e.ox += e.dir * QUAKE_PUSH;
+        e.x  += e.dir * QUAKE_PUSH * 2;
+      }
+    }
+    p.quakeActive = true; p.quakeTimer = 20;
+  }
+
+  // variable jump height — cut on release
+  if (jumpR && p.vy < 0 && !p.jumpCut) {
+    p.vy *= VAR_JUMP_CUT;
+    p.jumpCut = true;
+  }
+
+  // — gravity —
+  if (p.dashTimer > 0) {
+    // no gravity during dash — UNTOUCHED
+  } else if (p.wallContact) {
+    p.vy += WALL_SLIDE_G;
+    if (p.vy > 1.25) p.vy = 1.25;
+  } else if (p.floating) {
+    p.vy = 0.3;
+  } else {
+    // use lighter gravity during bounce rise for the floaty pop
+    const g = (p.bouncing && p.vy < 0) ? BOUNCE_RISE_G
+              : p.vy < 0 ? RISE_G : FALL_G;
+    p.vy += g;
+    if (p.vy >= 0) p.bouncing = false;  // bounce rise over, normal fall
+    if (p.vy > MAX_FALL) p.vy = MAX_FALL;
+  }
+
+  // — resolve X —
+  p.x += p.vx;
+  p.x = Math.max(0, Math.min(LW - p.w, p.x));
+  const rx = resolveX(p.x, p.y, p.w, p.h, p.vx);
+  p.x = rx.px; p.vx = rx.vx;
+
+  // — resolve Y —
+  p.wasOnGround = p.onGround;
+  p.y += p.vy;
+  const ry = resolveY(p.x, p.y, p.w, p.h, p.vy);
+  p.y = ry.py; p.vy = ry.vy;
+
+  if (ry.landed) {
+    p.onGround = true;
+    p.dashAvail = true;
+    p.floating  = false;
+    p.bouncing  = false;
+    p.jumpCut   = false;
+    p.jumpHeld  = false;
+    p.jumpCount = 0;
+
+    if (!p.wasOnGround) {
+      spawnParticles(p.x+p.w/2, p.y+p.h, P.particle, 4, 4, 2, 8);
+    }
+  } else {
+    p.onGround = false;
+  }
+  if (p.onGround) p.floatMeter = Math.min(100, p.floatMeter + 2);
+  if (ry.hitCeil) p.jumpCut = true;
+
+  if (p.quakeTimer > 0) p.quakeTimer--;
+  else p.quakeActive = false;
+
+  // — kill: fall out —
+  if (p.y > LH + 60) respawn();
+
+  // — hazard & enemy collision —
+  checkHazards();
+
+  // — win —
+  if (rectsOverlap(p.x,p.y,p.w,p.h, GOAL.x,GOAL.y,GOAL.w,GOAL.h)) {
+    gameState = 'win'; winTimer = 0;
+  }
+
+  // — particles —
+  particles = particles.filter(pt => {
+    pt.x += pt.vx; pt.y += pt.vy; pt.vy += 0.15;
+    pt.vx *= 0.92;
+    pt.life--;
+    return pt.life > 0;
+  });
+
+  // — afterimages —
+  p.afterImages = p.afterImages.filter(ai => { ai.life--; return ai.life > 0; });
+
+  // — anim — determine state from movement/ability flags
+  if (!p.dead) {
+    let _newState = 'idle';
+    if (p.dashTimer > 0) _newState = 'dash';
+    else if (p.wallContact) _newState = 'wall';
+    else if (!p.onGround) {
+      if (p.floating)       _newState = 'float';
+      else if (p.bouncing)  _newState = 'bounce';
+      else                  _newState = p.vy < 0 ? 'jump' : 'fall';
+    } else if (Math.abs(p.vx) > 0.2) {
+      _newState = 'run';
+    }
+
+    // Reset frame counter on state change for clean animation starts
+    if (_newState !== p.state) { p.animFrame = 0; p.animT = 0; }
+    p.state = _newState;
+  }
+
+  // Advance sprite frame at 8 game frames per animation frame
+  p.animT++;
+  if (p.animT >= 16) {
+    p.animT = 0;
+    const _def = SPRITE_DEFS[p.state] || SPRITE_DEFS['idle'];
+    if (_def.loop) {
+      const _next = p.animFrame + 1;
+      const _loopStart = _def.loopStart ?? 0;
+      p.animFrame = _next >= _def.frames ? _loopStart : _next;
+    } else {
+      // play once, hold last frame
+      if (p.animFrame < _def.frames - 1) p.animFrame++;
+    }
+  }
+
+  const stateLabel = p.bouncing ? 'BOUNCE' : p.state.toUpperCase();
+  document.getElementById('hudState').textContent = stateLabel;
+  document.getElementById('pip0').className = 'abilityPip' + (p.dashAvail ? '' : (p.onGround ? ' charging' : ' used'));
+  document.getElementById('floatFill').style.width = p.floatMeter + '%';
+
+  if (screenShake > 0) screenShake--;
+
+  updateCamera();
+}
+
+function checkHazards() {
+  const p = player;
+  // hazard gates
+  for (const hg of hazardGates) {
+    const active = (frame % hg.period) < hg.period/2 + hg.phase % (hg.period/2);
+    const open   = (frame % hg.period) >= hg.period/2;
+    if (!open && rectsOverlap(p.x,p.y,p.w,p.h, hg.x,hg.y,hg.w,hg.h)) respawn();
+  }
+  // rot barriers
+  for (const rb of rotBarriers) {
+    const bx1 = rb.cx + Math.cos(rb.angle) * rb.len - 4;
+    const by1 = rb.cy + Math.sin(rb.angle) * rb.len - 4;
+    const bx2 = rb.cx - Math.cos(rb.angle) * rb.len - 4;
+    const by2 = rb.cy - Math.sin(rb.angle) * rb.len - 4;
+    if (rectsOverlap(p.x,p.y,p.w,p.h, bx1,by1,8,8)) respawn();
+    if (rectsOverlap(p.x,p.y,p.w,p.h, bx2,by2,8,8)) respawn();
+  }
+  // enemies
+  for (const e of enemies) {
+    if (rectsOverlap(p.x+2,p.y+2,p.w-4,p.h-4, e.x,e.y,e.w,e.h)) {
+      p.dead = true;
+      p.state = 'dying';
+      p.animFrame = 0;
+      p.animT = 0;
+      p.vx = 0;
+      p.vy = 0;
+      deathTimer = 0;
+      return;
+    }
+  }
+}
+
+function respawn() {
+  const old = player;
+  player = makePlayer();
+  spawnParticles(old.x+old.w/2, old.y+old.h/2, P.h5, 16, 8, 8, 24);
+  screenShake = 6;
+}
+
+// ─── HNOV SPRITE SYSTEM — individual PNG renderer ──────────────────────
+function r(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(Math.round(x),Math.round(y),w,h); }
+
+// Per-state sprite definitions: folder, frame count, loop or play-once
+const SPRITE_DEFS = {
+  idle:   { folder: 'idle',      frames: 4, loop: true  },
+  run:    { folder: 'run',       frames: 3, loop: true  },
+  jump:   { folder: 'jump',      frames: 4, loop: true  },
+  fall:   { folder: 'jump',      frames: 4, loop: true  },
+  float:  { folder: 'dead hang', frames: 1, loop: true  },
+  bounce: { folder: 'bounce',    frames: 3, loop: true, loopStart: 1 },
+  wall:   { folder: 'wall grab', frames: 1, loop: true  },
+  dash:   { folder: 'dash',      frames: 1, loop: true  },
+  dying:  { folder: 'dying',     frames: 4, loop: false },
+};
+
+// Pre-load all PNG frames; keyed by folder name to avoid duplicate loads
+const SPRITE_IMGS = {};
+(function() {
+  const loaded = new Set();
+  for (const def of Object.values(SPRITE_DEFS)) {
+    if (loaded.has(def.folder)) continue;
+    loaded.add(def.folder);
+    SPRITE_IMGS[def.folder] = [];
+    for (let i = 1; i <= def.frames; i++) {
+      const img = new Image();
+      img.src = `animations/transparent/${def.folder}/${i}.png`;
+      SPRITE_IMGS[def.folder].push(img);
+    }
+  }
+})();
+
+// Sprite is drawn at 2x hitbox dimensions: 24x32 px, centred on the hitbox
+const SPRITE_W = 60;
+const SPRITE_H = 80;
+
+function drawHnov(wx, wy, facingRight, state, animFrame) {
+  const _def = SPRITE_DEFS[state] || SPRITE_DEFS['idle'];
+  const _imgs = SPRITE_IMGS[_def.folder];
+  const _frameIdx = animFrame % _imgs.length;
+  const _img = _imgs[_frameIdx];
+  if (!_img.complete || !_img.naturalWidth) return;
+
+  // Anchor: bottom-centre of the hitbox
+  const feetX = wx + 6;   // hitbox centre-x (w=12)
+  const feetY = wy + 16;  // hitbox bottom   (h=16)
+
+  const groundStates = ['idle', 'run', 'dying'];
+  const yOffset = groundStates.includes(state) ? 8 : 0;
+  const dx = feetX - SPRITE_W / 2;
+  const dy = feetY - SPRITE_H + yOffset;
+
+  ctx.save();
+
+  // Drop shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.20)';
+  ctx.beginPath();
+  ctx.ellipse(feetX, feetY + 1, SPRITE_W * 0.45, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Horizontal flip — run and wall sprites were exported mirrored, so invert for those states
+  const mirrorStates = ['wall'];
+  const stateFlipped = mirrorStates.includes(state);
+  if (stateFlipped ? facingRight : !facingRight) {
+    ctx.translate(feetX * 2, 0);
+    ctx.scale(-1, 1);
+  }
+
+  ctx.drawImage(_img, dx, dy, SPRITE_W, SPRITE_H);
+
+  // Dash tint overlay
+  if (state === 'dash') {
+    ctx.globalAlpha = 0.28;
+    ctx.fillStyle = '#a078ff';
+    ctx.fillRect(dx, dy, SPRITE_W, SPRITE_H);
+    ctx.globalAlpha = 1;
+  }
+
+  // Bounce impact ring
+  if (state === 'bounce') {
+    ctx.strokeStyle = '#e01828';
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.8;
+    ctx.beginPath();
+    ctx.arc(feetX, feetY, SPRITE_W * 0.4, 0, Math.PI * 2);
+    ctx.stroke();
+    const _starPts = [[-1,-2],[1,-2.5],[-1.5,-1],[1.5,-1.2]];
+    ctx.fillStyle = '#ffe840';
+    for (const [ox, oy] of _starPts) {
+      const px = feetX + ox * SPRITE_W * 0.3;
+      const py = feetY + oy * SPRITE_W * 0.3;
+      ctx.fillRect(px - 2, py - 1, 4, 2);
+      ctx.fillRect(px - 1, py - 2, 2, 4);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.restore();
+}
+// end sprite block
+
+
+function drawBackground() {
+  // deep bg
+  r(0, 0, CW, CH, P.bg0);
+
+  // parallax star layers
+  const sx0 = Math.round(cam.x * 0.03), sx1 = Math.round(cam.x * 0.07);
+  ctx.fillStyle = '#2a1a4e';
+  for (let i = 0; i < 60; i++) {
+    const bx = ((i*73 + 11) * 17 % (CW+80) - sx0 % (CW+80) + CW+80) % (CW+80);
+    const by = ((i*37 + 5) * 11) % 360;
+    ctx.fillRect(bx, by, 2, 2);
+  }
+  ctx.fillStyle = '#4a3a7e';
+  for (let i = 0; i < 40; i++) {
+    const bx = ((i*89 + 7) * 23 % (CW+80) - sx1 % (CW+80) + CW+80) % (CW+80);
+    const by = ((i*41 + 3) * 13) % 400;
+    ctx.fillRect(bx, by, 3, 3);
+  }
+
+  // distant silhouette buildings (parallax 0.15)
+  const bx = Math.round(cam.x * 0.15);
+  ctx.fillStyle = '#0d0d22';
+  const buildings = [
+    [0,360,160,270],[200,400,120,230],[340,340,180,290],[540,370,140,260],
+    [700,330,200,300],[920,380,160,250],[1100,350,140,280],[1260,390,180,240],
+    [1460,336,200,294],[1680,370,160,260],[1860,350,180,280],[2060,380,140,250],
+  ];
+  for (const [bldX, bldY, bldW, bldH] of buildings) {
+    const sx = ((bldX - bx) % (CW+200) + CW+200) % (CW+200) - 100;
+    r(sx, bldY, bldW, bldH, '#0d0d22');
+    // window grid
+    ctx.fillStyle = '#1a1a30';
+    for (let wy = bldY+10; wy < bldY+bldH-10; wy += 12) {
+      for (let wx = sx+8; wx < sx+bldW-8; wx += 10) {
+        if (Math.random() > 0.4) ctx.fillRect(wx, wy, 4, 5);
+      }
+    }
+  }
+}
+
+function drawWorld() {
+  ctx.save();
+  const shX = screenShake > 0 ? (Math.random()-0.5)*screenShake : 0;
+  const shY = screenShake > 0 ? (Math.random()-0.5)*screenShake : 0;
+  // 2× world scale: everything drawn at 2px per world-unit
+  ctx.scale(2, 2);
+  ctx.translate(-Math.round(cam.x) + shX, -Math.round(cam.y) + shY);
+
+  // — static platforms —
+  for (const p of staticPlats) {
+    r(p.x, p.y+3, p.w, p.h-3, P.plat1);
+    r(p.x, p.y, p.w, 3, P.platTop);
+    // subtle glow line
+    ctx.fillStyle = P.platGlow;
+    ctx.fillRect(p.x+1, p.y+1, p.w-2, 1);
+    // brick pattern
+    for (let bx = p.x; bx < p.x+p.w; bx+=16) {
+      ctx.fillStyle = P.plat2;
+      ctx.fillRect(bx, p.y+4, 1, p.h-6);
+    }
+  }
+
+  // — moving platforms —
+  for (const mp of movingPlats) {
+    r(mp.x, mp.y+3, mp.w, mp.h-3, P.moving);
+    r(mp.x, mp.y, mp.w, 3, P.movTop);
+    ctx.fillStyle = '#1a4a1a';
+    ctx.fillRect(mp.x+1, mp.y+1, mp.w-2, 1);
+  }
+
+  // — wind zones —
+  for (const wz of windZones) {
+    // subtle tinted zone
+    ctx.fillStyle = 'rgba(74,138,205,0.08)';
+    ctx.fillRect(wz.x, wz.y, wz.w, wz.h);
+    // animated wind lines
+    const wt = (frame * 2) % wz.w;
+    for (let i = 0; i < 4; i++) {
+      const lx = wz.x + (wt + i * (wz.w/4)) % wz.w;
+      const ly = wz.y + 10 + i * (wz.h/4);
+      ctx.strokeStyle = 'rgba(74,138,205,0.3)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([6,4]);
+      ctx.beginPath();
+      ctx.moveTo(lx, ly);
+      ctx.lineTo(lx + 20 * (wz.fx > 0 ? 1 : -1), ly);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    // label
+    ctx.fillStyle = 'rgba(74,138,205,0.5)';
+    ctx.font = '8px monospace';
+    ctx.fillText(wz.fx > 0 ? '»WIND»' : '«WIND«', wz.x+4, wz.y+10);
+  }
+
+  // — hazard gates —
+  for (const hg of hazardGates) {
+    const open = (frame % hg.period) >= hg.period/2;
+    if (open) {
+      ctx.fillStyle = 'rgba(205,74,74,0.15)';
+      ctx.fillRect(hg.x-2, hg.y, hg.w+4, hg.h);
+    } else {
+      r(hg.x, hg.y, hg.w, hg.h, P.hazardFg);
+      // glow
+      ctx.fillStyle = 'rgba(205,74,74,0.4)';
+      ctx.fillRect(hg.x-2, hg.y, hg.w+4, hg.h);
+    }
+  }
+
+  // — rotating barriers —
+  for (const rb of rotBarriers) {
+    ctx.save();
+    ctx.translate(rb.cx - Math.round(cam.x) + Math.round(cam.x), rb.cy);
+    // draw as two arms
+    ctx.strokeStyle = P.hazardFg;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(rb.angle)*rb.len, Math.sin(rb.angle)*rb.len);
+    ctx.lineTo(-Math.cos(rb.angle)*rb.len, -Math.sin(rb.angle)*rb.len);
+    ctx.stroke();
+    // end caps
+    ctx.fillStyle = '#ff8a8a';
+    ctx.fillRect(Math.cos(rb.angle)*rb.len-3, Math.sin(rb.angle)*rb.len-3, 6, 6);
+    ctx.fillRect(-Math.cos(rb.angle)*rb.len-3, -Math.sin(rb.angle)*rb.len-3, 6, 6);
+    ctx.restore();
+  }
+
+  // — enemies —
+  for (const e of enemies) {
+    // body
+    r(e.x, e.y, e.w, e.h, P.enemy);
+    r(e.x, e.y, e.w, 3, P.enemyFg);
+    // eyes
+    ctx.fillStyle = P.enemyFg;
+    const eyeX = e.dir > 0 ? e.x+9 : e.x+2;
+    ctx.fillRect(eyeX, e.y+4, 3, 3);
+    // patrol range indicator
+    ctx.fillStyle = 'rgba(205,74,205,0.15)';
+    ctx.fillRect(e.ox, e.y+e.h, e.range, 2);
+  }
+
+  // — quake ring —
+  if (player.quakeActive) {
+    const pr = player.quakeTimer / 20;
+    const qr = (1-pr) * QUAKE_RADIUS;
+    ctx.strokeStyle = `rgba(255,212,232,${pr*0.6})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(player.x + player.w/2, player.y + player.h, qr, 0, Math.PI*2);
+    ctx.stroke();
+  }
+
+  // — goal —
+  const gt = (frame * 0.05) % (Math.PI*2);
+  // pole
+  r(GOAL.x+3, GOAL.y, 3, GOAL.h, '#3a2a5e');
+  // flag body
+  r(GOAL.x+6, GOAL.y+2, 14, 10, '#6a5acd');
+  r(GOAL.x+6, GOAL.y+2, 14, 3,  '#9a8aff');
+  r(GOAL.x+18, GOAL.y+2, 2, 10, '#0a0a14');
+  // glow pulse
+  ctx.fillStyle = `rgba(154,138,255,${0.15 + Math.sin(gt)*0.1})`;
+  ctx.fillRect(GOAL.x-4, GOAL.y-4, GOAL.w+8, GOAL.h+8);
+  ctx.fillStyle = '#9a8aff';
+  ctx.font = '7px monospace';
+  ctx.fillText('END', GOAL.x+1, GOAL.y-4);
+
+  // — afterimages —
+  for (const ai of player.afterImages) {
+    const alpha = ai.life / 8 * 0.35;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    drawHnov(ai.x, ai.y, ai.facingRight, 'dash', 0);
+    ctx.restore();
+  }
+
+  // — particles —
+  for (const pt of particles) {
+    const alpha = pt.life / pt.maxLife;
+    ctx.fillStyle = pt.color;
+    ctx.globalAlpha = alpha;
+    ctx.fillRect(Math.round(pt.x), Math.round(pt.y), Math.round(pt.size), Math.round(pt.size));
+    ctx.globalAlpha = 1;
+  }
+
+  // — player —
+  drawHnov(player.x, player.y, player.facingRight, player.state, player.animFrame);
+
+  ctx.restore();
+}
+
+function drawVignette() {
+  const grd = ctx.createRadialGradient(CW/2,CH/2,CH*0.25, CW/2,CH/2,CH*0.85);
+  grd.addColorStop(0,'rgba(0,0,0,0)');
+  grd.addColorStop(1,'rgba(10,10,20,0.55)');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0,0,CW,CH);
+}
+
+function drawScanlines() {
+  ctx.fillStyle = 'rgba(0,0,0,0.025)';
+  for (let y=0;y<CH;y+=3) ctx.fillRect(0,y,CW,1);
+}
+
+function drawWin() {
+  winTimer++;
+  ctx.fillStyle = `rgba(10,10,20,${Math.min(winTimer/40,0.9)})`;
+  ctx.fillRect(0,0,CW,CH);
+  if (winTimer < 30) return;
+
+  const t = Math.min((winTimer-30)/40, 1);
+  ctx.save();
+  ctx.translate(CW/2, CH/2);
+  ctx.scale(0.5+t*0.5, 0.5+t*0.5);
+  ctx.globalAlpha = t;
+
+  ctx.fillStyle = '#0d0d1e';
+  ctx.fillRect(-110,-50,220,100);
+  ctx.strokeStyle = '#6a5acd';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(-110,-50,220,100);
+  ctx.strokeStyle = '#3a2a6e';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(-116,-56,232,112);
+
+  ctx.fillStyle = '#e8d8ff';
+  ctx.font = 'bold 26px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('YOU MADE IT', 0, -12);
+  ctx.fillStyle = '#6a5acd';
+  ctx.font = '10px monospace';
+  ctx.fillText('PRESS R TO PLAY AGAIN', 0, 16);
+  ctx.restore();
+}
+
+function drawDead() {
+  deadOverlayTimer++;
+  ctx.fillStyle = `rgba(10,10,20,${Math.min(deadOverlayTimer/40,0.9)})`;
+  ctx.fillRect(0,0,CW,CH);
+  if (deadOverlayTimer < 30) return;
+
+  const t = Math.min((deadOverlayTimer-30)/40, 1);
+  ctx.save();
+  ctx.translate(CW/2, CH/2);
+  ctx.scale(0.5+t*0.5, 0.5+t*0.5);
+  ctx.globalAlpha = t;
+
+  ctx.fillStyle = '#0d0d1e';
+  ctx.fillRect(-110,-50,220,100);
+  ctx.strokeStyle = '#6a5acd';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(-110,-50,220,100);
+  ctx.strokeStyle = '#3a2a6e';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(-116,-56,232,112);
+
+  ctx.fillStyle = '#e8d8ff';
+  ctx.font = 'bold 26px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('YOU DIED', 0, -12);
+  ctx.fillStyle = '#6a5acd';
+  ctx.font = '10px monospace';
+  ctx.fillText('PRESS R TO CONTINUE', 0, 16);
+  ctx.restore();
+}
+
+// ─── RENDER ──────────────────────────────────────────────────────────────────
+function render() {
+  ctx.clearRect(0,0,CW,CH);
+  drawBackground();
+  if (gameState === 'playing' || gameState === 'win' || gameState === 'dead') drawWorld();
+  drawScanlines();
+  drawVignette();
+  if (gameState === 'win') drawWin();
+  if (gameState === 'dead') drawDead();
+}
+
+// ─── LOOP ────────────────────────────────────────────────────────────────────
+function loop() {
+  update();
+  render();
+  clearFrame();
+  requestAnimationFrame(loop);
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+function startGame() {
+  player = makePlayer();
+  particles = [];
+  frame = 0;
+  deathTimer = 0;
+  deadOverlayTimer = 0;
+  gameState = 'playing';
+  cam.x = 0; cam.y = 0;
+  document.getElementById('overlay').classList.add('hidden');
+}
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'KeyR' && (gameState === 'playing' || gameState === 'win')) {
+    startGame();
+  }
+  if (e.code === 'KeyR' && gameState === 'dead') {
+    deathTimer = 0;
+    deadOverlayTimer = 0;
+    respawn();
+    gameState = 'playing';
+  }
+});
+document.getElementById('overlayBtn').addEventListener('click', startGame);
+
+loop();
+</script>
+</body>
+</html>
