@@ -31,11 +31,11 @@ body{
 }
 .abilityPip.used{background:#1a1a2e;border:1px solid #3a2a6e;}
 .abilityPip.charging{background:#ff6b9d;}
-#floatMeter{
+#floatMeter,#wallMeter{
   width:40px;height:6px;background:#1a1a2e;border:1px solid #3a2a6e;
   display:inline-block;vertical-align:middle;
 }
-#floatFill{height:100%;background:#6a5acd;transition:width 0.05s;}
+#floatFill,#wallFill{height:100%;background:#6a5acd;transition:width 0.05s;}
 #controls{
   margin-top:6px;color:#2a1a4e;font-size:10px;
   letter-spacing:1px;text-align:center;line-height:2;
@@ -75,6 +75,8 @@ body{
       <span id="hudState">IDLE</span>
       <span style="font-size:10px;letter-spacing:1px;margin-left:12px;margin-right:4px;">FLOAT</span>
       <div id="floatMeter"><div id="floatFill" style="width:100%"></div></div>
+      <span style="font-size:10px;letter-spacing:1px;margin-left:12px;margin-right:4px;">WALL</span>
+      <div id="wallMeter"><div id="wallFill" style="width:100%"></div></div>
     </div>
     <div id="abilityBar">
       <span style="font-size:10px;letter-spacing:1px;margin-right:2px;">DASH</span>
@@ -142,17 +144,21 @@ const P = {
 };
 
 // ─── LEVEL ───────────────────────────────────────────────────────────────────
-const LW = 640, LH = 315;
-const GROUND_Y = 283;
+const LW = 840, LH = 1480;
+const GROUND_Y = 1440;
 
 // static platforms {x,y,w,h,type:'solid'|'pass'}
-// U-shape arena: floor + full-height left/right walls + two interior floating platforms
+// Vertical level: full-width rooftop floor + tall building walls with gap + interior platforms
 const staticPlats = [
-  {x:0,   y:GROUND_Y, w:640, h:32,         type:'solid'}, // floor
-  {x:0,   y:0,        w:16,  h:GROUND_Y+32, type:'solid'}, // left wall
-  {x:624, y:0,        w:16,  h:GROUND_Y+32, type:'solid'}, // right wall
-  {x:80,  y:215,      w:120, h:16,          type:'solid'}, // platform 1 (lower, left)
-  {x:400, y:165,      w:120, h:16,          type:'solid'}, // platform 2 (higher, right)
+  {x:32,     y:GROUND_Y, w:LW-64, h:40,  type:'solid'}, // floor — inset from walls (16-unit gap each side)
+  {x:0,      y:LH-1420,  w:16,   h:1420, type:'solid'}, // left wall  — base at level bottom, rises upward
+  {x:LW-16,  y:LH-1420,  w:16,   h:1420, type:'solid'}, // right wall — same; gap is horizontal beside floor
+  {x:80,     y:1000,     w:120, h:16,   type:'solid'}, // platform 1 (lower)
+  {x:560,    y:770,      w:120, h:16,   type:'solid'}, // platform 2 (upper)
+  {x:90,     y:570,      w:130, h:16,   type:'solid'}, // platform 3 — left, wall-jump reach from plat 2
+  {x:560,    y:390,      w:130, h:16,   type:'solid'}, // platform 4 — right, wall-jump + bounce reach
+  {x:90,     y:220,      w:130, h:16,   type:'solid'}, // platform 5 — left, wall-jump reach from plat 4
+  {x:300,    y:80,       w:220, h:16,   type:'solid'}, // platform 6 — top, wide landing pad for goal
 ];
 
 // moving platforms {x,y,w,h, ox,oy, dx,dy, range, t}
@@ -171,11 +177,11 @@ const rotBarriers = [
 // patrol enemies {x,y,w,h, ox, range, speed, dir}
 // one stationary enemy on platform 2 (y:165), sitting on top: enemy.y+h=165
 const enemies = [
-  {x:430, y:147, w:18, h:18, ox:430, range:0, speed:0, dir:0},
+  {x:580, y:752, w:18, h:18, ox:580, range:0, speed:0, dir:0},
 ];
 
 // goal
-const GOAL = {x:260, y:GROUND_Y-60, w:24, h:60}; // on the floor, center of arena
+const GOAL = {x:370, y:20, w:24, h:60}; // top of world — base sits on platform 6 (y:80)
 
 // quake radius (pushback on enemies)
 const QUAKE_RADIUS = 80;
@@ -195,9 +201,9 @@ const WALL_SLIDE_G = 0.07;
 const WALL_JUMP_VX = 3.5;
 const WALL_JUMP_VY = -5.0;
 // dash — UNTOUCHED
-const DASH_SPEED   = 9;
-const DASH_FRAMES  = 12;
-const DASH_GRACE   = 4;     // frames of gravity immunity after dash
+const DASH_SPEED   = 4.5;
+const DASH_FRAMES  = 36;
+const DASH_GRACE   = 12;    // frames of gravity immunity after dash
 // bounce — moderate upward pop, triggerable in air
 const BOUNCE_VY    = -3.5;  // modest height, not a rocket
 const BOUNCE_RISE_G = 0.11; // same as RISE_G — consistent moon feel
@@ -207,7 +213,7 @@ const VAR_JUMP_CUT = 0.45;
 // ─── PLAYER ──────────────────────────────────────────────────────────────────
 function makePlayer() {
   return {
-    x:40, y:240, w:12, h:16,
+    x:40, y:GROUND_Y - 16, w:12, h:16,
     vx:0, vy:0,
     onGround:false, wasOnGround:false,
     facingRight:true,
@@ -216,6 +222,7 @@ function makePlayer() {
     // wall
     wallDir:0,       // -1 left wall, 1 right wall, 0 none
     wallContact:false,
+    wallMeter:100,
     // abilities
     dashAvail:true,
     dashTimer:0,
@@ -236,10 +243,9 @@ function makePlayer() {
     // anim
     animT:0,
     animFrame:0,
+    dashGhosts:[],
     // spawn
     dead:false,
-    // afterimage for dash
-    afterImages:[],
   };
 }
 let player = makePlayer();
@@ -281,12 +287,12 @@ function clearFrame() {
 }
 
 // ─── CAMERA ──────────────────────────────────────────────────────────────────
-const cam = {x:0, y:0};
+const cam = {x:0, y: LH - CH / 2};
 function updateCamera() {
   let tx = player.x - CW/4 + player.w/2;
-  let ty = player.y - CH/4 * 0.55;
+  let ty = player.y - (CH / 2 - (LH - GROUND_Y) - player.h);
   tx = Math.max(0, Math.min(LW - CW/2, tx));
-  ty = Math.max(0, Math.min(LH - CH/2, ty));
+  ty = Math.max(0, ty); // vertical: follow player freely, don't go above world top
   cam.x += (tx - cam.x) * 0.1;
   cam.y += (ty - cam.y) * 0.1;
 }
@@ -412,8 +418,6 @@ function update() {
     p.vx = p.dashDir * DASH_SPEED;
     p.vy = 0;
     p.dashTimer--;
-    // afterimage
-    p.afterImages.push({x:p.x, y:p.y, life:8, facingRight:p.facingRight});
   }
   if (p.dashGrace > 0) p.dashGrace--;
   // — dash — UNTOUCHED BLOCK END
@@ -467,6 +471,14 @@ function update() {
     p.wallDir = touchWallL ? -1 : 1;
   } else {
     p.wallDir = 0;
+  }
+
+  // — wall meter —
+  if (p.wallContact) {
+    p.wallMeter = Math.max(0, p.wallMeter - 1);
+    if (p.wallMeter === 0) { p.wallContact = false; p.wallDir = 0; }
+  } else if (p.onGround) {
+    p.wallMeter = Math.min(100, p.wallMeter + 2);
   }
 
   // — wall jump —
@@ -583,9 +595,6 @@ function update() {
     return pt.life > 0;
   });
 
-  // — afterimages —
-  p.afterImages = p.afterImages.filter(ai => { ai.life--; return ai.life > 0; });
-
   // — anim — determine state from movement/ability flags
   if (!p.dead) {
     let _newState = 'idle';
@@ -606,7 +615,8 @@ function update() {
 
   // Advance sprite frame at 8 game frames per animation frame
   p.animT++;
-  if (p.animT >= 16) {
+  const _animSpeed = p.state === 'dash' ? 9 : 16;
+  if (p.animT >= _animSpeed) {
     p.animT = 0;
     const _def = SPRITE_DEFS[p.state] || SPRITE_DEFS['idle'];
     if (_def.loop) {
@@ -619,10 +629,19 @@ function update() {
     }
   }
 
+  // — dash ghost capture —
+  if (p.dashTimer > 0) {
+    p.dashGhosts.push({x:p.x, y:p.y, animFrame:p.animFrame, facingRight:p.facingRight});
+    if (p.dashGhosts.length > DASH_FRAMES) p.dashGhosts.shift();
+  } else if (p.dashGhosts.length > 0) {
+    p.dashGhosts = [];
+  }
+
   const stateLabel = p.bouncing ? 'BOUNCE' : p.state.toUpperCase();
   document.getElementById('hudState').textContent = stateLabel;
   document.getElementById('pip0').className = 'abilityPip' + (p.dashAvail ? '' : (p.onGround ? ' charging' : ' used'));
   document.getElementById('floatFill').style.width = p.floatMeter + '%';
+  document.getElementById('wallFill').style.width = p.wallMeter + '%';
 
   if (screenShake > 0) screenShake--;
 
@@ -655,6 +674,8 @@ function checkHazards() {
       p.animT = 0;
       p.vx = 0;
       p.vy = 0;
+      p.dashTimer = 0;
+      p.dashGrace = 0;
       deathTimer = 0;
       return;
     }
@@ -679,8 +700,8 @@ const SPRITE_DEFS = {
   fall:   { folder: 'jump',      frames: 4, loop: true  },
   float:  { folder: 'dead hang', frames: 1, loop: true  },
   bounce: { folder: 'bounce',    frames: 3, loop: true, loopStart: 1 },
-  wall:   { folder: 'wall grab', frames: 1, loop: true  },
-  dash:   { folder: 'dash',      frames: 1, loop: true  },
+  wall:   { folder: 'wall grab', frames: 1, loop: true, scale: 0.85 },
+  dash:   { folder: 'dash',      frames: 2, loop: true  },
   dying:  { folder: 'dying',     frames: 4, loop: false },
 };
 
@@ -699,6 +720,13 @@ const SPRITE_IMGS = {};
     }
   }
 })();
+
+// Background animation frames (3 frames, cycled independently of sprite system)
+const BG_IMGS = [1, 2, 3].map(i => {
+  const img = new Image();
+  img.src = `animations/background/background ${i}.jpg`;
+  return img;
+});
 
 // Sprite is drawn at 2x hitbox dimensions: 24x32 px, centred on the hitbox
 const SPRITE_W = 60;
@@ -729,22 +757,16 @@ function drawHnov(wx, wy, facingRight, state, animFrame) {
   ctx.fill();
 
   // Horizontal flip — run and wall sprites were exported mirrored, so invert for those states
-  const mirrorStates = ['wall'];
+  const mirrorStates = ['wall', 'dash'];
   const stateFlipped = mirrorStates.includes(state);
   if (stateFlipped ? facingRight : !facingRight) {
     ctx.translate(feetX * 2, 0);
     ctx.scale(-1, 1);
   }
 
-  ctx.drawImage(_img, dx, dy, SPRITE_W, SPRITE_H);
-
-  // Dash tint overlay
-  if (state === 'dash') {
-    ctx.globalAlpha = 0.28;
-    ctx.fillStyle = '#a078ff';
-    ctx.fillRect(dx, dy, SPRITE_W, SPRITE_H);
-    ctx.globalAlpha = 1;
-  }
+  const _scale = _def.scale ?? 1;
+  const _sw = SPRITE_W * _scale, _sh = SPRITE_H * _scale;
+  ctx.drawImage(_img, feetX - _sw / 2, feetY - _sh + yOffset, _sw, _sh);
 
   // Bounce impact ring
   if (state === 'bounce') {
@@ -771,43 +793,16 @@ function drawHnov(wx, wy, facingRight, state, animFrame) {
 
 
 function drawBackground() {
-  // deep bg
-  r(0, 0, CW, CH, P.bg0);
-
-  // parallax star layers
-  const sx0 = Math.round(cam.x * 0.03), sx1 = Math.round(cam.x * 0.07);
-  ctx.fillStyle = '#2a1a4e';
-  for (let i = 0; i < 60; i++) {
-    const bx = ((i*73 + 11) * 17 % (CW+80) - sx0 % (CW+80) + CW+80) % (CW+80);
-    const by = ((i*37 + 5) * 11) % 360;
-    ctx.fillRect(bx, by, 2, 2);
-  }
-  ctx.fillStyle = '#4a3a7e';
-  for (let i = 0; i < 40; i++) {
-    const bx = ((i*89 + 7) * 23 % (CW+80) - sx1 % (CW+80) + CW+80) % (CW+80);
-    const by = ((i*41 + 3) * 13) % 400;
-    ctx.fillRect(bx, by, 3, 3);
-  }
-
-  // distant silhouette buildings (parallax 0.15)
-  const bx = Math.round(cam.x * 0.15);
-  ctx.fillStyle = '#0d0d22';
-  const buildings = [
-    [0,360,160,270],[200,400,120,230],[340,340,180,290],[540,370,140,260],
-    [700,330,200,300],[920,380,160,250],[1100,350,140,280],[1260,390,180,240],
-    [1460,336,200,294],[1680,370,160,260],[1860,350,180,280],[2060,380,140,250],
-  ];
-  for (const [bldX, bldY, bldW, bldH] of buildings) {
-    const sx = ((bldX - bx) % (CW+200) + CW+200) % (CW+200) - 100;
-    r(sx, bldY, bldW, bldH, '#0d0d22');
-    // window grid
-    ctx.fillStyle = '#1a1a30';
-    for (let wy = bldY+10; wy < bldY+bldH-10; wy += 12) {
-      for (let wx = sx+8; wx < sx+bldW-8; wx += 10) {
-        if (Math.random() > 0.4) ctx.fillRect(wx, wy, 4, 5);
-      }
-    }
-  }
+  const _img = BG_IMGS[0];
+  if (!_img.complete || !_img.naturalWidth) { r(0, 0, CW, CH, P.bg0); return; }
+  const _scale = Math.max(CW / _img.naturalWidth, CH / _img.naturalHeight) * 1.5;
+  const bgW = _img.naturalWidth  * _scale;
+  const bgH = _img.naturalHeight * _scale;
+  const bgX = (CW - bgW) / 2;
+  const bgCamRef = LH - CH / 2;
+  let bgY = (CH - bgH) / 2 - (cam.y - bgCamRef) * 2 * 0.3;
+  bgY = Math.max(CH - bgH, Math.min(0, bgY));
+  ctx.drawImage(_img, bgX, bgY, bgW, bgH);
 }
 
 function drawWorld() {
@@ -937,15 +932,6 @@ function drawWorld() {
   ctx.font = '7px monospace';
   ctx.fillText('END', GOAL.x+1, GOAL.y-4);
 
-  // — afterimages —
-  for (const ai of player.afterImages) {
-    const alpha = ai.life / 8 * 0.35;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    drawHnov(ai.x, ai.y, ai.facingRight, 'dash', 0);
-    ctx.restore();
-  }
-
   // — particles —
   for (const pt of particles) {
     const alpha = pt.life / pt.maxLife;
@@ -953,6 +939,22 @@ function drawWorld() {
     ctx.globalAlpha = alpha;
     ctx.fillRect(Math.round(pt.x), Math.round(pt.y), Math.round(pt.size), Math.round(pt.size));
     ctx.globalAlpha = 1;
+  }
+
+  // — dash ghosts —
+  if (player.dashTimer > 0 && player.dashGhosts.length > 0) {
+    const _g = player.dashGhosts;
+    const _offsets = [9, 18, 27];
+    const _alphas  = [0.45, 0.25, 0.12];
+    for (let i = 0; i < 3; i++) {
+      const idx = _g.length - _offsets[i];
+      if (idx >= 0) {
+        ctx.save();
+        ctx.globalAlpha = _alphas[i];
+        drawHnov(_g[idx].x, _g[idx].y, _g[idx].facingRight, 'dash', _g[idx].animFrame);
+        ctx.restore();
+      }
+    }
   }
 
   // — player —
@@ -1063,7 +1065,7 @@ function startGame() {
   deathTimer = 0;
   deadOverlayTimer = 0;
   gameState = 'playing';
-  cam.x = 0; cam.y = 0;
+  cam.x = 0; cam.y = LH - CH / 2;
   document.getElementById('overlay').classList.add('hidden');
 }
 
