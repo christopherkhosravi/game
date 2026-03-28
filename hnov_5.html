@@ -825,8 +825,8 @@ function drawBackground() {
   }
   const vW = BG_VIDEO.videoWidth  || 704;
   const vH = BG_VIDEO.videoHeight || 1280;
-  const dW = vW * 2;
-  const dH = vH * 2;
+  const dW = vW * 2.4;
+  const dH = vH * 2.4;
   // Left-anchor: when cam.x === 0 (leftmost), bg left edge is flush with canvas left.
   // Horizontal parallax: 30% of camera speed. cam.x in world units; *2 = canvas pixels (2x scale).
   let bgX = -cam.x * 2 * 0.3;
