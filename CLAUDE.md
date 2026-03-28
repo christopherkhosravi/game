@@ -26,6 +26,7 @@ Claude Code preview server is configured in `.claude/launch.json` as `game` on p
 - GitHub: `https://github.com/christopherkhosravi/game.git`
 - Branch: `main`
 - Git user: `christopherkhosravi` / `christopher.khosravi8@gmail.com`
+- GitHub Pages: `https://christopherkhosravi.github.io/game/hnov_5.html` (deployed from `gh-pages` branch, pushed manually with `git push origin main:gh-pages`)
 
 ---
 
@@ -47,12 +48,11 @@ game/
 │   │   ├── wall grab/       1.png  (folder name has a space — correct, don't rename)
 │   │   └── dead hang/       1.png  (folder name has a space — correct, don't rename)
 │   ├── background/
-│   │   ├── background 1.jpg   ← 3-frame JPG fallback loop (what currently runs in game)
+│   │   ├── background 1.jpg   ← 3-frame JPG set (legacy, defined in code as BG_IMGS but not used)
 │   │   ├── background 2.jpg
 │   │   ├── background 3.jpg
-│   │   ├── background.mp4     ← Portrait video (704×1280, MJPEG, 5.03s). NOT used in current code.
-│   │   └── frames/            ← 161 JPG files (frame_001.jpg – frame_161.jpg). Source material,
-│   │                             not yet converted to PNG. See Background section below.
+│   │   ├── background.mp4     ← Portrait video (704×1280, MJPEG, 5.03s). THE active background.
+│   │   └── frames/            ← 161 JPG files (frame_001.jpg – frame_161.jpg). Source material only.
 │   ├── [idle|run|jump|bounce|dash|dying|stomp|wall grab]/
 │   │                          ← Source JPG frames (photographed/scanned). Not used by the game
 │   │                             directly — only the transparent/ PNGs are.
@@ -161,27 +161,33 @@ Sprites are PNG files with alpha, stored in `animations/transparent/{folder}/{fr
 
 ### What currently runs
 
-The game looks for `animations/background/frame_001.png` through `frame_010.png` (loaded by `startBgFramePreload()`). **These files do not exist.** The game falls back to drawing the solid `#0a0a14` background colour.
+A hidden `<video>` element (`BG_VIDEO`) loads `animations/background/background.mp4`. The video plays forward natively; when it reaches the end, the `'ended'` event fires, the video pauses, and `bgDir` flips to `-1`. While reversed, `updateBgVideo()` manually steps `currentTime` backward by `1/30` each tick. When `currentTime` reaches 0, `bgDir` flips back to `1` and `play()` is called. This creates a full-duration ping-pong loop.
 
-The 3-frame JPG loop (`BG_IMGS`, loaded from `background 1.jpg`, `background 2.jpg`, `background 3.jpg`) is defined in the code but the fallback in `drawBackground()` never reaches the JPG path — it returns early when `bgFrames[bgFrameIndex]` is not a loaded image.
+`drawBackground()` draws `BG_VIDEO` directly to the canvas using `ctx.drawImage(BG_VIDEO, ...)`. The `bgEverReady` flag latches `true` on the first frame where `BG_VIDEO.readyState >= 2`, and acts as a permanent draw gate — once set, it never checks `readyState` again (this prevents blackout during reverse seeks which drop `readyState`).
+
+The 3-frame JPG set (`BG_IMGS`, loaded from `background 1.jpg`, `background 2.jpg`, `background 3.jpg`) is still defined in the code but **not used by the current `drawBackground()`**. It is legacy code.
+
+### background.mp4
+
+`background.mp4` is a **portrait video** (704×1280, MJPEG codec, ~32fps, 5.03s). It is **the active background source** loaded by `BG_VIDEO`.
+
+### Critical lesson: video play() vs currentTime
+
+Never call both `video.play()` AND manually set `video.currentTime` on every animation frame simultaneously — they conflict. Each manual seek drops `readyState`, which stalls the video near frame 0 (the darkest frame), making the background appear black. The current approach: use `play()` for forward direction only, catch the end with the `'ended'` event, then only manually step `currentTime` for the reverse pass (while paused). The `bgEverReady` latch prevents the blackout during reverse seeks.
 
 ### The frames/ folder
 
-`animations/background/frames/` contains **161 JPG files** (`frame_001.jpg` – `frame_161.jpg`). These are the source frames for the background animation (extracted from `background.mp4`). They have **not been converted to PNG** yet. When this work is done, the PNG sequence should be placed at `animations/background/frame_001.png` etc. (not inside `frames/` — directly in `background/`).
-
-### Ping-pong logic
-
-`updateBgVideo()` runs every game loop tick and advances `bgFrameIndex` forward or backward based on `bgDir`. At frame 9 it reverses; at frame 0 it reverses again. This is a simple ping-pong over 10 frames.
-
-### Background video (background.mp4) — not in current code
-
-`background.mp4` is a **portrait video** (704×1280, MJPEG codec, 32fps, 5.03s). It was explored as the background approach but abandoned in favour of the PNG sequence. The video is **not referenced anywhere in the current hnov_5.html**.
-
-**Critical lesson from that exploration:** Never call both `video.play()` AND manually set `video.currentTime` on every animation frame simultaneously — they conflict. Each manual seek drops `readyState`, which stalls the video near frame 0 (the darkest frame), making the background appear black. For ping-pong video: use `play()` for forward direction, catch the turn-around with `timeupdate`/`ended` events, and only manually step `currentTime` for the reverse pass (while paused).
+`animations/background/frames/` contains **161 JPG files** (`frame_001.jpg` – `frame_161.jpg`). These are the source frames extracted from `background.mp4`. They are **not used by the game** — they exist as source material only.
 
 ### Background positioning
 
-When background PNG frames are added, they use 2.4× scale of the 704×1280 source (i.e. drawn at 1689.6×3072). Horizontal parallax at 30% of camera speed, left-anchored. Vertical parallax at 30%, bottom-anchored to floor level.
+The background is drawn at **2.4× native resolution** (704×2.4 = 1689.6 wide, 1280×2.4 = 3072 tall). Horizontal parallax at 30% of camera speed, left-anchored when `cam.x === 0`. Vertical parallax at 30%, bottom-anchored to floor level (`bgCamRef = LH - CH/2`).
+
+### Failed approaches (do not repeat)
+
+1. **PNG frame preloader** — extracting frames from the video via `toDataURL()` at load time. Worked in theory but created huge memory overhead and long load times. Was replaced with a simpler PNG file sequence approach, but the PNG files were never created, so the game showed no background at all. Reverted.
+2. **PNG file sequence** — loading `frame_001.png` through `frame_010.png` directly. The files don't exist on disk, so the game showed a solid black background. Reverted.
+3. **Restricting video to 2s–end range** — adding `BG_LOOP_START = 2` and using `loadedmetadata` to seek to 2s. This caused freezes at turnaround points and complicated the logic without clear benefit. Reverted.
 
 ---
 
