@@ -825,19 +825,18 @@ function drawBackground() {
   }
   const vW = BG_VIDEO.videoWidth  || 704;
   const vH = BG_VIDEO.videoHeight || 1280;
-  const _scale = Math.max(CW / vW, CH / vH) * 1.5;
-  const bgW = vW * _scale;
-  const bgH = vH * _scale;
+  const dW = vW * 2;
+  const dH = vH * 2;
   // Left-anchor: when cam.x === 0 (leftmost), bg left edge is flush with canvas left.
   // Horizontal parallax: 30% of camera speed. cam.x in world units; *2 = canvas pixels (2x scale).
   let bgX = -cam.x * 2 * 0.3;
-  bgX = Math.max(CW - bgW, Math.min(0, bgX));
+  bgX = dW >= CW ? Math.max(CW - dW, Math.min(0, bgX)) : Math.min(0, bgX);
   // Bottom-anchor: when cam.y === bgCamRef (floor level), bg bottom is flush with canvas bottom.
   // Vertical parallax: 30% of camera speed.
   const bgCamRef = LH - CH / 2;
-  let bgY = (CH - bgH) - (cam.y - bgCamRef) * 2 * 0.3;
-  bgY = Math.max(CH - bgH, Math.min(0, bgY));
-  ctx.drawImage(BG_VIDEO, bgX, bgY, bgW, bgH);
+  let bgY = (CH - dH) - (cam.y - bgCamRef) * 2 * 0.3;
+  bgY = Math.max(CH - dH, Math.min(0, bgY));
+  ctx.drawImage(BG_VIDEO, bgX, bgY, dW, dH);
 }
 
 function drawWorld() {
