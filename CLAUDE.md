@@ -161,33 +161,38 @@ Sprites are PNG files with alpha, stored in `animations/transparent/{folder}/{fr
 
 ### What currently runs
 
-A hidden `<video>` element (`BG_VIDEO`) loads `animations/background/background.mp4`. The video plays forward natively; when it reaches the end, the `'ended'` event fires, the video pauses, and `bgDir` flips to `-1`. While reversed, `updateBgVideo()` manually steps `currentTime` backward by `1/30` each tick. When `currentTime` reaches 0, `bgDir` flips back to `1` and `play()` is called. This creates a full-duration ping-pong loop.
+**JPG frame ping-pong loop.** `BG_FRAMES` is an array of 10 `Image` objects loaded from `animations/background/frames/frame_001.jpg` – `frame_010.jpg`. `bgFrameIdx` (0-based) and `bgDir` (±1) drive the ping-pong. `updateBgVideo()` is called each game tick and increments/decrements `bgFrameIdx`, flipping `bgDir` at each end. `drawBackground()` calls `ctx.drawImage(BG_FRAMES[bgFrameIdx], ...)`.
 
-`drawBackground()` draws `BG_VIDEO` directly to the canvas using `ctx.drawImage(BG_VIDEO, ...)`. The `bgEverReady` flag latches `true` on the first frame where `BG_VIDEO.readyState >= 2`, and acts as a permanent draw gate — once set, it never checks `readyState` again (this prevents blackout during reverse seeks which drop `readyState`).
-
-The 3-frame JPG set (`BG_IMGS`, loaded from `background 1.jpg`, `background 2.jpg`, `background 3.jpg`) is still defined in the code but **not used by the current `drawBackground()`**. It is legacy code.
-
-### background.mp4
-
-`background.mp4` is a **portrait video** (704×1280, MJPEG codec, ~32fps, 5.03s). It is **the active background source** loaded by `BG_VIDEO`.
-
-### Critical lesson: video play() vs currentTime
-
-Never call both `video.play()` AND manually set `video.currentTime` on every animation frame simultaneously — they conflict. Each manual seek drops `readyState`, which stalls the video near frame 0 (the darkest frame), making the background appear black. The current approach: use `play()` for forward direction only, catch the end with the `'ended'` event, then only manually step `currentTime` for the reverse pass (while paused). The `bgEverReady` latch prevents the blackout during reverse seeks.
-
-### The frames/ folder
-
-`animations/background/frames/` contains **161 JPG files** (`frame_001.jpg` – `frame_161.jpg`). These are the source frames extracted from `background.mp4`. They are **not used by the game** — they exist as source material only.
+Frames are **832×480 px** (landscape). The game draws them at **2.4× native resolution**: dW = 832×2.4 = 1996.8, dH = 480×2.4 = 1152.
 
 ### Background positioning
 
-The background is drawn at **2.4× native resolution** (704×2.4 = 1689.6 wide, 1280×2.4 = 3072 tall). Horizontal parallax at 30% of camera speed, left-anchored when `cam.x === 0`. Vertical parallax at 30%, bottom-anchored to floor level (`bgCamRef = LH - CH/2`).
+- **Width/height**: always use `img.naturalWidth * 2.4` / `img.naturalHeight * 2.4` — never hardcode dimensions.
+- **Horizontal**: left-anchored when `cam.x === 0`; 30% parallax (`bgX = -cam.x * 2 * 0.3`), clamped so the image never reveals a gap on left or right.
+- **Vertical**: **no parallax** — `bgY = CH - dH` always. This keeps the bottom of the background flush with the canvas bottom regardless of how high the camera has scrolled. With landscape frames (dH=1152 vs canvas CH=945), the top of the image is above the canvas top, so the background always covers the full canvas height.
+
+### Why no vertical parallax
+
+The old portrait video (dH=3072) was so tall that vertical parallax caused negligible visible drift. The landscape frames (dH=1152) are only 207px taller than the canvas, so vertical parallax visibly lifts the bottom edge off-screen as the player climbs. Bottom-flush with `bgY = CH - dH` is the correct anchor for these dimensions.
+
+### The frames/ folder
+
+`animations/background/frames/` contains **161 JPG files** (`frame_001.jpg` – `frame_161.jpg`). The game uses only frames 1–10. The rest exist as source material.
+
+### background.mp4
+
+`background.mp4` (portrait, 704×1280, H.264, ~32fps, 5.03s) is no longer used. It was replaced by the JPG frame approach because the MP4's `moov` atom was at the end of the file, causing GitHub Pages (CDN) to serve a black background while the browser waited for the atom to download. No `ffmpeg -movflags +faststart` was applied.
+
+### Critical lesson: video play() vs currentTime
+
+Never call both `video.play()` AND manually set `video.currentTime` on every animation frame simultaneously — they conflict. Each manual seek drops `readyState`, stalling the video near frame 0 (the darkest frame). If ever returning to video: use `play()` for forward direction only, catch the turnaround with `timeupdate`/`ended` events, and only step `currentTime` manually for the reverse pass while paused.
 
 ### Failed approaches (do not repeat)
 
-1. **PNG frame preloader** — extracting frames from the video via `toDataURL()` at load time. Worked in theory but created huge memory overhead and long load times. Was replaced with a simpler PNG file sequence approach, but the PNG files were never created, so the game showed no background at all. Reverted.
-2. **PNG file sequence** — loading `frame_001.png` through `frame_010.png` directly. The files don't exist on disk, so the game showed a solid black background. Reverted.
-3. **Restricting video to 2s–end range** — adding `BG_LOOP_START = 2` and using `loadedmetadata` to seek to 2s. This caused freezes at turnaround points and complicated the logic without clear benefit. Reverted.
+1. **MP4 video (GitHub Pages)** — `moov` atom was at end of file (byte ~12.48M of 12.5M). CDN serving caused black background until full download. Replaced with JPG frames.
+2. **PNG frame preloader** — extracting frames via `toDataURL()` at load time. Memory overhead too large. Reverted.
+3. **PNG file sequence** — files didn't exist on disk. Black background. Reverted.
+4. **Vertical parallax for background Y** — with landscape frames (dH=1152), a 30%-parallax formula drifted bgY from −207 toward 0 as the player climbed, lifting the bottom edge off-screen. Removed; replaced with constant `bgY = CH - dH`.
 
 ---
 
@@ -271,6 +276,12 @@ P.h5       = '#ff6b9d'  // accent pink (used in bounce fx, quake)
 P.dashFx   = '#b09aef'  // dash particles
 P.bounceFx = '#ffd4e8'  // bounce particles
 ```
+
+---
+
+## Standing rule: document every completed task
+
+After every completed task, document what was done and how the working solution functions in CLAUDE.md. This serves as a reference so if something breaks later, you know exactly how to restore it.
 
 ---
 
