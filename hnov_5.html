@@ -728,35 +728,28 @@ const BG_IMGS = [1, 2, 3].map(i => {
   return img;
 });
 
-// Background PNG frames — ping-pong loop (frames 1–10)
+// Background video — ping-pong loop
+const BG_VIDEO = document.createElement('video');
+BG_VIDEO.src = 'animations/background/background.mp4';
+BG_VIDEO.muted = true;
+BG_VIDEO.playsInline = true;
+BG_VIDEO.preload = 'auto';
 let bgDir = 1;        // 1 = forward, -1 = reverse
 let bgEverReady = false;
-let bgFrames = [];    // array of Image objects
-let bgFrameIndex = 0; // current frame index (0–9)
 
-function startBgFramePreload() {
-  bgFrames = [];
-  for (let i = 1; i <= 10; i++) {
-    const img = new Image();
-    img.src = 'animations/background/frame_' + String(i).padStart(3, '0') + '.png';
-    bgFrames.push(img);
-  }
-  bgEverReady = true;
-  bgFrameIndex = 0;
-}
+BG_VIDEO.addEventListener('canplay', () => { BG_VIDEO.play(); });
+BG_VIDEO.addEventListener('ended', () => {
+  bgDir = -1;
+  BG_VIDEO.pause();
+});
 
 function updateBgVideo() {
-  if (bgDir === 1) {
-    bgFrameIndex++;
-    if (bgFrameIndex >= 10) {
-      bgFrameIndex = 9;
-      bgDir = -1;
-    }
-  } else {
-    bgFrameIndex--;
-    if (bgFrameIndex < 0) {
-      bgFrameIndex = 0;
+  if (bgDir === -1) {
+    const step = BG_VIDEO.duration ? BG_VIDEO.duration / (BG_VIDEO.duration * 30) : 1/30;
+    BG_VIDEO.currentTime = Math.max(0, BG_VIDEO.currentTime - step);
+    if (BG_VIDEO.currentTime <= 0) {
       bgDir = 1;
+      BG_VIDEO.play();
     }
   }
 }
@@ -826,14 +819,12 @@ function drawHnov(wx, wy, facingRight, state, animFrame) {
 
 
 function drawBackground() {
-  const frameImg = bgFrames[bgFrameIndex];
-  if (!frameImg || !frameImg.complete) {
-    r(0, 0, CW, CH, P.bg0);
-    return;
+  if (!bgEverReady) {
+    if (BG_VIDEO.readyState >= 2) bgEverReady = true;
+    else { r(0, 0, CW, CH, P.bg0); return; }
   }
-
-  const vW = 704;
-  const vH = 1280;
+  const vW = BG_VIDEO.videoWidth  || 704;
+  const vH = BG_VIDEO.videoHeight || 1280;
   const dW = vW * 2.4;
   const dH = vH * 2.4;
   // Left-anchor: when cam.x === 0 (leftmost), bg left edge is flush with canvas left.
@@ -845,7 +836,7 @@ function drawBackground() {
   const bgCamRef = LH - CH / 2;
   let bgY = (CH - dH) - (cam.y - bgCamRef) * 2 * 0.3;
   bgY = Math.max(CH - dH, Math.min(0, bgY));
-  ctx.drawImage(frameImg, bgX, bgY, dW, dH);
+  ctx.drawImage(BG_VIDEO, bgX, bgY, dW, dH);
 }
 
 function drawWorld() {
@@ -1126,7 +1117,6 @@ document.addEventListener('keydown', e => {
 });
 document.getElementById('overlayBtn').addEventListener('click', startGame);
 
-startBgFramePreload();
 loop();
 </script>
 </body>
