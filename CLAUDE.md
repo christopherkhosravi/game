@@ -135,3 +135,31 @@ These systems are tuned and intentional. Do not modify them unless the user spec
 - Background bottom-left aligns with canvas bottom-left on spawn
 - Smooth vertical scrolling with camera
 - No black borders at any camera position
+
+## Background Padding Compensation
+
+**Problem:** Background positioning was mathematically correct (bgX=0, bgY=-207) but visually misaligned. Artwork appeared ~2 character-heights too high and ~3 character-widths too far right.
+
+**Root Cause:** JPG frame files contain intentional padding:
+- Top padding: ~60px of black space before the cityscape artwork begins (12.5% of 480px height)
+- Left padding: ~30px of black space before buildings reach the left edge
+- When the image was positioned to place the bottom-left corner flush with the canvas, the padding was visible and pushed the artwork higher and further right than expected
+
+**Solution:**
+- Added padding compensation offsets to the positioning calculations
+- Top padding (scaled): `padTopScaled = 60 * 2.4 = 144px`
+- Left padding (scaled): `padLeftScaled = 30 * 2.4 = 72px`
+- Applied offsets to shift image so padding sits off-screen and visible artwork fills the canvas
+- Restored parallax logic: `bgX = -cam.x * 2 * 0.3 - padLeftScaled`
+- Restored scroll logic: `bgY = (LH - cam.y) * 2 - dH - padTopScaled`
+
+**Formula:**
+- `bgX = -cam.x * 2 * 0.3 - 72` (30% parallax minus left padding offset)
+- `bgY = (LH - cam.y) * 2 - dH - 144` (full vertical scroll minus top padding offset)
+- Clamping: `Math.max(CW - dW, Math.min(0, bgX))` and `Math.max(CH - dH, Math.min(0, bgY))`
+
+**Result:**
+- Visible artwork content fills canvas bottom-left corner on spawn
+- Artwork properly framed without excessive padding borders
+- Full parallax and vertical scrolling restored
+- Background positioning matches visual expectations

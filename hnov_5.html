@@ -829,9 +829,17 @@ function drawBackground() {
   const vH = 480;
   const dW = vW * 2.4;
   const dH = vH * 2.4;
-  // TEST: Force raw positioning (no parallax, no scroll)
-  let bgX = 0;
-  let bgY = CH - dH;
+  // Padding compensation: artwork has ~60px top padding and ~30px left padding (scaled to 144px and 72px)
+  const padTopScaled = 60 * 2.4;  // 144px
+  const padLeftScaled = 30 * 2.4; // 72px
+  // Left-anchor with parallax: when cam.x === 0 (leftmost), bg left edge is flush with canvas left.
+  // Horizontal parallax: 30% of camera speed. cam.x in world units; *2 = canvas pixels (2x scale).
+  let bgX = -cam.x * 2 * 0.3 - padLeftScaled;
+  bgX = dW >= CW ? Math.max(CW - dW, Math.min(0, bgX)) : Math.min(0, bgX);
+  // Bottom-anchor with padding offset: on spawn, visible artwork sits flush with canvas bottom-left.
+  // Full vertical scrolling (1.0 parallax): background scrolls with camera.
+  let bgY = (LH - cam.y) * 2 - dH - padTopScaled;
+  bgY = Math.max(CH - dH, Math.min(0, bgY));
   ctx.drawImage(frameImg, bgX, bgY, dW, dH);
 }
 
