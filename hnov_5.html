@@ -721,14 +721,7 @@ const SPRITE_IMGS = {};
   }
 })();
 
-// Background animation frames (3 frames, cycled independently of sprite system)
-const BG_IMGS = [1, 2, 3].map(i => {
-  const img = new Image();
-  img.src = `animations/background/background ${i}.jpg`;
-  return img;
-});
-
-// Background PNG frames — ping-pong loop (frames 1–10)
+// Background frames — ping-pong loop (frames 1–10)
 let bgDir = 1;        // 1 = forward, -1 = reverse
 let bgEverReady = false;
 let bgFrames = [];    // array of Image objects
@@ -738,7 +731,7 @@ function startBgFramePreload() {
   bgFrames = [];
   for (let i = 1; i <= 10; i++) {
     const img = new Image();
-    img.src = 'animations/background/frame_' + String(i).padStart(3, '0') + '.png';
+    img.src = 'animations/background/frames/frame_' + String(i).padStart(3, '0') + '.jpg';
     bgFrames.push(img);
   }
   bgEverReady = true;
@@ -840,11 +833,11 @@ function drawBackground() {
   // Horizontal parallax: 30% of camera speed. cam.x in world units; *2 = canvas pixels (2x scale).
   let bgX = -cam.x * 2 * 0.3;
   bgX = dW >= CW ? Math.max(CW - dW, Math.min(0, bgX)) : Math.min(0, bgX);
-  // Bottom-anchor: when cam.y === bgCamRef (floor level), bg bottom is flush with canvas bottom.
-  // Vertical parallax: 30% of camera speed.
+  // Bottom-anchor: when cam.y === bgCamRef (floor level), bg bottom aligns with GROUND_Y.
+  // Full vertical scrolling (1.0 parallax): background moves with camera.
   const bgCamRef = LH - CH / 2;
-  let bgY = (CH - dH) - (cam.y - bgCamRef) * 2 * 0.3;
-  bgY = Math.max(CH - dH, Math.min(0, bgY));
+  let bgY = (GROUND_Y - cam.y) * 2 - dH;
+  bgY = Math.max((GROUND_Y - bgCamRef) * 2 - dH, Math.min(0, bgY));
   ctx.drawImage(frameImg, bgX, bgY, dW, dH);
 }
 
