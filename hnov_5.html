@@ -843,7 +843,6 @@ function drawBackground() {
   let bgY = (LH - cam.y) * 2 - dH - padTopScaled;
   bgY += 50; // Manual adjustment: shift down
   bgY += 150; // Additional nudge: shift down
-  bgY = Math.max(CH - dH, Math.min(0, bgY));
   ctx.drawImage(frameImg, bgX, bgY, dW, dH);
 }
 
