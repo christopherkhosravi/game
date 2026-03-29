@@ -818,7 +818,6 @@ function drawHnov(wx, wy, facingRight, state, animFrame) {
 // end sprite block
 
 
-let bgLogOnce = false;
 function drawBackground() {
   const frameImg = bgFrames[bgFrameIndex];
   if (!frameImg || !frameImg.complete) {
@@ -833,10 +832,6 @@ function drawBackground() {
   // TEST: Force raw positioning (no parallax, no scroll)
   let bgX = 0;
   let bgY = CH - dH;
-  if (!bgLogOnce) {
-    console.log('bgX=', bgX, 'bgY=', bgY, 'cam.x=', cam.x, 'cam.y=', cam.y, 'dW=', dW, 'dH=', dH, 'LH=', LH, 'GROUND_Y=', GROUND_Y, 'CH=', CH, 'CW=', CW);
-    bgLogOnce = true;
-  }
   ctx.drawImage(frameImg, bgX, bgY, dW, dH);
 }
 
