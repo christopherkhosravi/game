@@ -108,3 +108,30 @@ These systems are tuned and intentional. Do not modify them unless the user spec
 - Clamping allows natural range based on camera position, preventing over-clamping
 
 **Test:** Climb the platforms and verify the background scrolls smoothly upward and the background bottom edge aligns with where the ground platform visually appears on screen.
+
+## Background Dimensions Fix
+
+**Problem:** Background was stretched into portrait and showed a black U-shaped border. The code used hardcoded 704×1280 portrait dimensions while actual frames are 832×480 landscape.
+
+**Root Cause:**
+- Code assumed: vW = 704, vH = 1280 (portrait: 0.55 aspect ratio)
+- Actual frames: 832×480 (widescreen: 1.73 aspect ratio)
+- Stretch factors: 2.03x horizontal, 6.40x vertical (severe non-uniform distortion)
+- Black border: Background bottom positioned at GROUND_Y canvas position (865), leaving 80px gap at canvas bottom (945)
+
+**Solution:**
+- Changed vW/vH from 704/1280 to 832/480 (actual frame dimensions)
+- Kept 2.4x scale factor: dW = 1996.8, dH = 1152
+- Changed bgY anchor from GROUND_Y to LH (level height at 1480)
+- Updated clamping to match new display height: `Math.max(CH - dH, Math.min(0, bgY))`
+
+**Formula:** `bgY = (LH - cam.y) * 2 - dH`
+- On spawn (cam.y = bgCamRef ≈ 1007.5): bgY = 945 - 1152 = -207, background bottom exactly at canvas bottom
+- As player climbs (cam.y decreases): bgY increases toward 0, background scrolls up showing higher areas
+- Clamping range: [-207, 0] prevents overshoot
+
+**Result:**
+- Correct 1.73:1 aspect ratio preserved (no distortion)
+- Background bottom-left aligns with canvas bottom-left on spawn
+- Smooth vertical scrolling with camera
+- No black borders at any camera position

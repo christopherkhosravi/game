@@ -825,19 +825,18 @@ function drawBackground() {
     return;
   }
 
-  const vW = 704;
-  const vH = 1280;
+  const vW = 832;
+  const vH = 480;
   const dW = vW * 2.4;
   const dH = vH * 2.4;
   // Left-anchor: when cam.x === 0 (leftmost), bg left edge is flush with canvas left.
   // Horizontal parallax: 30% of camera speed. cam.x in world units; *2 = canvas pixels (2x scale).
   let bgX = -cam.x * 2 * 0.3;
   bgX = dW >= CW ? Math.max(CW - dW, Math.min(0, bgX)) : Math.min(0, bgX);
-  // Bottom-anchor: when cam.y === bgCamRef (floor level), bg bottom aligns with GROUND_Y.
-  // Full vertical scrolling (1.0 parallax): background moves with camera.
-  const bgCamRef = LH - CH / 2;
-  let bgY = (GROUND_Y - cam.y) * 2 - dH;
-  bgY = Math.max((GROUND_Y - bgCamRef) * 2 - dH, Math.min(0, bgY));
+  // Bottom-anchor: on spawn, bg bottom-left aligns with canvas bottom-left.
+  // Full vertical scrolling (1.0 parallax): background scrolls with camera.
+  let bgY = (LH - cam.y) * 2 - dH;
+  bgY = Math.max(CH - dH, Math.min(0, bgY));
   ctx.drawImage(frameImg, bgX, bgY, dW, dH);
 }
 
