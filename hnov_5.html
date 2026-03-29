@@ -818,6 +818,7 @@ function drawHnov(wx, wy, facingRight, state, animFrame) {
 // end sprite block
 
 
+let bgLogOnce = false;
 function drawBackground() {
   const frameImg = bgFrames[bgFrameIndex];
   if (!frameImg || !frameImg.complete) {
@@ -829,14 +830,13 @@ function drawBackground() {
   const vH = 480;
   const dW = vW * 2.4;
   const dH = vH * 2.4;
-  // Left-anchor: when cam.x === 0 (leftmost), bg left edge is flush with canvas left.
-  // Horizontal parallax: 30% of camera speed. cam.x in world units; *2 = canvas pixels (2x scale).
-  let bgX = -cam.x * 2 * 0.3;
-  bgX = dW >= CW ? Math.max(CW - dW, Math.min(0, bgX)) : Math.min(0, bgX);
-  // Bottom-anchor: on spawn, bg bottom-left aligns with canvas bottom-left.
-  // Full vertical scrolling (1.0 parallax): background scrolls with camera.
-  let bgY = (LH - cam.y) * 2 - dH;
-  bgY = Math.max(CH - dH, Math.min(0, bgY));
+  // TEST: Force raw positioning (no parallax, no scroll)
+  let bgX = 0;
+  let bgY = CH - dH;
+  if (!bgLogOnce) {
+    console.log('bgX=', bgX, 'bgY=', bgY, 'cam.x=', cam.x, 'cam.y=', cam.y, 'dW=', dW, 'dH=', dH, 'LH=', LH, 'GROUND_Y=', GROUND_Y, 'CH=', CH, 'CW=', CW);
+    bgLogOnce = true;
+  }
   ctx.drawImage(frameImg, bgX, bgY, dW, dH);
 }
 
