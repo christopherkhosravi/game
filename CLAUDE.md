@@ -164,12 +164,13 @@ These systems are tuned and intentional. Do not modify them unless the user spec
 - Full parallax and vertical scrolling restored
 - Background positioning matches visual expectations
 
-## Background Frame Dimensions: Native 704x1280 (No Scale)
+## Background Scale: Width-Fit to Canvas
 
-**Solution:** Draw background at native frame dimensions with no scale factor. Removed the 2.4x multiplier and the old padding offsets (padTopScaled, padLeftScaled) which were calibrated to the old landscape frames and no longer apply.
+**Solution:** Scale background so its width exactly matches the canvas width (CW=1680), maintaining correct aspect ratio. Scale factor is calculated dynamically as CW/704 (no hardcoded value).
 
-**Result:**
-- dW = 704 (native frame width)
-- dH = 1280 (native frame height)
-- No horizontal or vertical distortion
+**Formula:**
+- bgScale = CW / 704 = 1680 / 704 = ~2.3864
+- dW = CW = 1680 (exact canvas width)
+- dH = 1280 * bgScale = ~3054.5 (portrait height scaled proportionally)
+- Aspect ratio preserved: dW/dH = 704/1280 = 0.55
 - Scroll and parallax logic unchanged
