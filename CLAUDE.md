@@ -164,15 +164,12 @@ These systems are tuned and intentional. Do not modify them unless the user spec
 - Full parallax and vertical scrolling restored
 - Background positioning matches visual expectations
 
-## Background Frame Dimensions Updated to Portrait (704x1280)
+## Background Frame Dimensions: Native 704x1280 (No Scale)
 
-**Problem:** vW and vH were hardcoded to 832 and 480 (old landscape frame dimensions). Frames were replaced with full 704x1280 portrait extracts from the source MP4, causing the source to be incorrectly stretched to 1996.8x1152 (2.84x horizontal, 0.9x vertical).
-
-**Solution:** Updated vW = 704, vH = 1280 to match actual frame dimensions. Kept 2.4x scale factor unchanged.
+**Solution:** Draw background at native frame dimensions with no scale factor. Removed the 2.4x multiplier and the old padding offsets (padTopScaled, padLeftScaled) which were calibrated to the old landscape frames and no longer apply.
 
 **Result:**
-- dW = 704 * 2.4 = 1689.6 (fits canvas width 1680 with slight overflow)
-- dH = 1280 * 2.4 = 3072 (tall portrait -- 3072px drawn height vs 945px canvas)
-- No horizontal or vertical distortion of source image
-
-**Note:** With dH=3072, which vertical slice is visible depends entirely on bgY from the scroll formula. Padding offsets (padTopScaled, padLeftScaled) and manual adjustments may need re-tuning.
+- dW = 704 (native frame width)
+- dH = 1280 (native frame height)
+- No horizontal or vertical distortion
+- Scroll and parallax logic unchanged
