@@ -81,6 +81,7 @@ These systems are tuned and intentional. Do not modify them unless the user spec
 - Do not commit unless the user explicitly asks.
 - Do not push unless the user explicitly asks.
 - Keep commit messages short (1–2 lines) and focused on what changed and why.
+- **Always push to gh-pages after every push to main** — the game is served from the gh-pages branch on GitHub Pages, so both branches must stay in sync.
 
 ### Verification
 - After any gameplay-affecting change, note what the user should test (e.g., "try jumping off the left wall on platform 3").
