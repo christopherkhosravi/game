@@ -20,6 +20,10 @@ game/
 │   │   ├── background.mp4          (source video, not used in game)
 │   │   └── frames/
 │   │       └── frame_001–161.jpg   (animated background sequence)
+│   ├── countdown_3.png           (countdown sprite, step 3)
+│   ├── countdown_2.png           (countdown sprite, step 2)
+│   ├── countdown_1.png           (countdown sprite, step 1)
+│   ├── countdown_go.png          (countdown sprite, GO!)
 │   └── transparent/
 │       ├── bounce/      1–4.png    (only 1–3 used in SPRITE_DEFS)
 │       ├── dash/        1–3.png    (only 1–2 used in SPRITE_DEFS)
@@ -172,12 +176,15 @@ git push origin main:gh-pages
 
 **Countdown timing:** 60 frames per digit (≈1 s each), 40 frames for "GO!" (~0.67 s), then timer starts.
 
-**How to swap in custom art assets:**
-Replace `drawCountdownStep(step, frac)` — it is the single customization point. Parameters:
-- `step`: `3 | 2 | 1` (digit) or `0` ("GO!")
-- `frac`: `0.0` (just appeared) → `1.0` (about to change) — use this to animate/fade the asset
+**Countdown art assets:**
+Four 512×512 PNG files in `animations/`: `countdown_3.png`, `countdown_2.png`, `countdown_1.png`, `countdown_go.png`. Split from `321go.jpg` (2×2 grid, top-left=3, top-right=2, bottom-left=1, bottom-right=GO!). Each is drawn at 200×200px centered at `(CW/2, 108)`.
 
-The surrounding `drawSpawnTimer()` function computes `step` and `frac` from `countdown`/`countdownTick` and calls `drawCountdownStep`. Do not need to modify anything else to change countdown visuals.
+**How to swap in custom art assets:**
+Change the `img.src` paths in the `COUNTDOWN_IMGS` preload block (top of SPAWN TIMER section) or replace `drawCountdownStep(step, frac)`. Parameters:
+- `step`: `3 | 2 | 1` (digit) or `0` ("GO!")
+- `frac`: `0.0` (just appeared) → `1.0` (about to change) — drives the GO! fade-out alpha
+
+The stopwatch timer text is `44px "Courier New"`, displayed at `(CW/2, 24)` with `textBaseline = 'top'`.
 
 **Integration points:**
 - `update()` — countdown block runs at top, early-returns (skipping input) while `countdown >= 0`

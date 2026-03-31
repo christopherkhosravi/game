@@ -1107,27 +1107,31 @@ function drawDead() {
 }
 
 // ─── SPAWN TIMER ─────────────────────────────────────────────────────────────
+// Preload countdown images — keyed by step value (3, 2, 1, 0)
+const COUNTDOWN_IMGS = {};
+(function() {
+  const files = {3:'countdown_3', 2:'countdown_2', 1:'countdown_1', 0:'countdown_go'};
+  for (const [step, name] of Object.entries(files)) {
+    const img = new Image();
+    img.src = `animations/${name}.png`;
+    COUNTDOWN_IMGS[step] = img;
+  }
+})();
+
 // drawCountdownStep is the single swap point for custom countdown assets.
-// Replace this function to draw sprites/images instead of text for each step.
+// To swap art: change the img.src paths above and/or adjust size/position here.
 //   step : 3 | 2 | 1 = digit   |   0 = "GO!"
 //   frac : 0.0 (just appeared) → 1.0 (about to change)
 function drawCountdownStep(step, frac) {
-  const label = step === 0 ? 'GO!' : String(step);
-  const isGo  = step === 0;
-  const size  = Math.round((isGo ? 96 : 88) * (1.05 - frac * 0.07));
+  const isGo = step === 0;
   const alpha = isGo && frac > 0.65 ? 1 - (frac - 0.65) / 0.35 : 1;
+  const img   = COUNTDOWN_IMGS[step];
+  if (!img || !img.complete || !img.naturalWidth) return;
 
+  const size = 200;
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.textAlign    = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = `bold ${size}px "Courier New", monospace`;
-  // drop shadow
-  ctx.fillStyle = 'rgba(0,0,0,0.65)';
-  ctx.fillText(label, CW / 2 + 4, 108 + 4);
-  // main label
-  ctx.fillStyle = isGo ? '#ff6b9d' : '#e8d8ff';
-  ctx.fillText(label, CW / 2, 108);
+  ctx.drawImage(img, CW / 2 - size / 2, 108 - size / 2, size, size);
   ctx.restore();
 }
 
@@ -1157,9 +1161,9 @@ function drawSpawnTimer() {
   ctx.save();
   ctx.textAlign    = 'center';
   ctx.textBaseline = 'top';
-  ctx.font         = '22px "Courier New", monospace';
+  ctx.font         = '44px "Courier New", monospace';
   ctx.fillStyle    = 'rgba(0,0,0,0.55)';
-  ctx.fillText(txt, CW / 2 + 2, 26);
+  ctx.fillText(txt, CW / 2 + 3, 27);
   ctx.fillStyle    = '#e8d8ff';
   ctx.fillText(txt, CW / 2, 24);
   ctx.restore();
