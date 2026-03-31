@@ -64,6 +64,25 @@ These systems are tuned and intentional. Do not modify them unless the user spec
 - **Camera system** — lerp factor, clamping logic, 2x scale relationship
 - **Control mapping** — WASD/arrows, Space, Q/E, R
 
+## GitHub Pages Deployment
+
+The live game is served from the `gh-pages` branch via **legacy build** (`build_type: legacy`, source branch `gh-pages`, path `/`). There is no custom Actions workflow — GitHub's built-in Pages builder handles it.
+
+**If a deployment gets stuck:**
+GitHub sometimes creates a "pages build and deployment" Actions workflow that enters a `waiting` state while the legacy build also stalls. These can conflict. Fix:
+```
+curl -s -X POST \
+  -H "Authorization: token <PAT>" \
+  "https://api.github.com/repos/christopherkhosravi/game/pages/builds"
+```
+This triggers a fresh legacy build directly. Once status returns `"built"`, the stuck Actions run auto-cancels. The live site at `https://christopherkhosravi.github.io/game/hnov_5.html` should reflect the latest `gh-pages` commit.
+
+**Always push to both branches after every code change:**
+```
+git push origin main
+git push origin main:gh-pages
+```
+
 ## Standing Rules
 
 ### Before Every Task
