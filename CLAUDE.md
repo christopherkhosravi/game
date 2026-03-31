@@ -184,7 +184,7 @@ Change the `img.src` paths in the `COUNTDOWN_IMGS` preload block (top of SPAWN T
 - `step`: `3 | 2 | 1` (digit) or `0` ("GO!")
 - `frac`: `0.0` (just appeared) → `1.0` (about to change) — drives the GO! fade-out alpha
 
-The stopwatch timer text is `44px "Courier New"`, displayed at `(CW/2, 24)` with `textBaseline = 'top'`.
+The stopwatch timer text is `88px "Courier New"`, displayed at `(CW/2, 24)` with `textBaseline = 'top'`. Two draw passes with `shadowColor = '#ff6b9d'` at `shadowBlur = 32` then `14` create the neon pink bloom effect.
 
 **Integration points:**
 - `update()` — countdown block runs at top, early-returns (skipping input) while `countdown >= 0`

@@ -1161,10 +1161,12 @@ function drawSpawnTimer() {
   ctx.save();
   ctx.textAlign    = 'center';
   ctx.textBaseline = 'top';
-  ctx.font         = '44px "Courier New", monospace';
-  ctx.fillStyle    = 'rgba(0,0,0,0.55)';
-  ctx.fillText(txt, CW / 2 + 3, 27);
+  ctx.font         = '88px "Courier New", monospace';
   ctx.fillStyle    = '#e8d8ff';
+  ctx.shadowColor  = '#ff6b9d';
+  ctx.shadowBlur   = 32;
+  ctx.fillText(txt, CW / 2, 24);
+  ctx.shadowBlur   = 14;
   ctx.fillText(txt, CW / 2, 24);
   ctx.restore();
 }
