@@ -136,6 +136,38 @@ These systems are tuned and intentional. Do not modify them unless the user spec
 - Smooth vertical scrolling with camera
 - No black borders at any camera position
 
+## Spawn Timer System
+
+**What it does:**
+- On spawn/respawn, a 3 → 2 → 1 → GO! countdown plays at top-center of the canvas. Player input is disabled during the countdown.
+- After "GO!" fades out, a stopwatch starts counting up in `MM:SS.cs` format (centiseconds), displayed top-center.
+- Timer stops (frozen) when the player reaches the goal flag.
+- Timer stops and resets to 0 immediately on death. On respawn the countdown replays and a fresh timer starts.
+
+**Key variables (GAME STATE section):**
+- `countdown` — current display step: 3/2/1 = digit, 0 = "GO!", -1 = inactive
+- `countdownTick` — frames elapsed since countdown began (resets each spawn)
+- `timerRunning` — true while stopwatch is counting
+- `timerStartTime` — `performance.now()` snapshot when timer started
+- `timerFrozenMs` — saved elapsed ms when timer was stopped (used for display)
+
+**Countdown timing:** 60 frames per digit (≈1 s each), 40 frames for "GO!" (~0.67 s), then timer starts.
+
+**How to swap in custom art assets:**
+Replace `drawCountdownStep(step, frac)` — it is the single customization point. Parameters:
+- `step`: `3 | 2 | 1` (digit) or `0` ("GO!")
+- `frac`: `0.0` (just appeared) → `1.0` (about to change) — use this to animate/fade the asset
+
+The surrounding `drawSpawnTimer()` function computes `step` and `frac` from `countdown`/`countdownTick` and calls `drawCountdownStep`. Do not need to modify anything else to change countdown visuals.
+
+**Integration points:**
+- `update()` — countdown block runs at top, early-returns (skipping input) while `countdown >= 0`
+- `update()` dead block — `timerRunning = false; timerFrozenMs = 0` on first death frame
+- `update()` win check — freezes `timerFrozenMs` before setting `timerRunning = false`
+- `respawn()` — resets timer and sets `countdown = 3; countdownTick = 0`
+- `startGame()` — same reset as `respawn()`
+- `render()` — calls `drawSpawnTimer()` when `gameState === 'playing'`
+
 ## Background Padding Compensation
 
 **Problem:** Background positioning was mathematically correct (bgX=0, bgY=-207) but visually misaligned. Artwork appeared ~2 character-heights too high and ~3 character-widths too far right.
