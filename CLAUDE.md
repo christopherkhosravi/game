@@ -232,3 +232,27 @@ The stopwatch timer text is `88px "Courier New"`, displayed at `(CW/2, 24)` with
 - dH = 1280 * bgScale = ~3054.5 (portrait height scaled proportionally)
 - Aspect ratio preserved: dW/dH = 704/1280 = 0.55
 - Scroll and parallax logic unchanged
+
+## Billboard Platform Visuals
+
+**What it does:** The 6 floating platforms (staticPlats indices 3–8) are drawn as scaled billboard PNG images instead of the default brick/color fill. Collision boxes are unchanged — only the visual rendering differs. The floor (index 0) and walls (indices 1–2) keep their original appearance.
+
+**Assets:** `animations/billboard_1.png` through `billboard_5.png` — 1024×1024 RGBA PNGs with transparent backgrounds and neon pixel-art billboard designs.
+
+**Assignment (BILLBOARD_PLAT_MAP):**
+| Floating slot | staticPlats index | Billboard |
+|---|---|---|
+| 0 | 3 (platform 1, left, y=1000) | billboard_1 |
+| 1 | 4 (platform 2, right, y=770) | billboard_2 |
+| 2 | 5 (platform 3, left, y=570) | billboard_3 |
+| 3 | 6 (platform 4, right, y=390) | billboard_4 |
+| 4 | 7 (platform 5, left, y=220) | billboard_5 |
+| 5 | 8 (platform 6 top, y=80) | billboard_3 |
+
+Pattern 1,2,3,4,5,3 — no two adjacent platforms share the same image. Platform 6 (top) reuses billboard_3 because it is not adjacent to platform 3 in the climbing path.
+
+**Implementation:**
+- `BILLBOARD_IMGS` — array of 5 `Image` objects preloaded at startup (after background frame loader)
+- `BILLBOARD_PLAT_MAP` — `[0,1,2,3,4,2]` maps floating-platform slot to `BILLBOARD_IMGS` index
+- `drawWorld()` platform loop converted from `for…of` to indexed `for` loop; `pi >= 3` branches to `ctx.drawImage(img, p.x, p.y, p.w, p.h)` (drawn in 2× world-scale context, so world coords are used directly)
+- Fallback: if image not yet loaded, draws the original brick fill

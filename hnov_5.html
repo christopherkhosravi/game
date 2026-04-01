@@ -799,6 +799,19 @@ function startBgFramePreload() {
   bgFrameIndex = 0;
 }
 
+// Billboard images — one per floating platform (staticPlats indices 3–8)
+const BILLBOARD_IMGS = [];
+(function() {
+  for (let i = 1; i <= 5; i++) {
+    const img = new Image();
+    img.src = `animations/billboard_${i}.png`;
+    BILLBOARD_IMGS.push(img);
+  }
+})();
+// Map floating-platform slot (0–5) to BILLBOARD_IMGS index (0–4)
+// Pattern 1,2,3,4,5,3 — no two adjacent platforms share the same image
+const BILLBOARD_PLAT_MAP = [0, 1, 2, 3, 4, 2];
+
 function updateBgVideo() {
   if (bgDir === 1) {
     bgFrameIndex++;
@@ -911,7 +924,20 @@ function drawWorld() {
   ctx.translate(-Math.round(cam.x) + shX, -Math.round(cam.y) + shY);
 
   // — static platforms —
-  for (const p of staticPlats) {
+  for (let pi = 0; pi < staticPlats.length; pi++) {
+    const p = staticPlats[pi];
+    if (pi >= 3) {
+      // floating platforms — draw billboard PNG scaled to platform dimensions
+      const img = BILLBOARD_IMGS[BILLBOARD_PLAT_MAP[pi - 3]];
+      if (img.complete && img.naturalWidth > 0) {
+        ctx.drawImage(img, p.x, p.y, p.w, p.h);
+      } else {
+        // fallback while image loads
+        r(p.x, p.y+3, p.w, p.h-3, P.plat1);
+        r(p.x, p.y, p.w, 3, P.platTop);
+      }
+      continue;
+    }
     r(p.x, p.y+3, p.w, p.h-3, P.plat1);
     r(p.x, p.y, p.w, 3, P.platTop);
     // subtle glow line
