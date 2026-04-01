@@ -1221,6 +1221,41 @@ document.addEventListener('keydown', e => {
 });
 document.getElementById('overlayBtn').addEventListener('click', startGame);
 
+// ─── SUPABASE ────────────────────────────────────────────────────────────────
+const SB_URL = 'https://tascjmutmudmvpxtynbl.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhc2NqbXV0bXVkbXZweHR5bmJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5OTc1NDgsImV4cCI6MjA5MDU3MzU0OH0.RePPRowO9xPrOFiHIBXGR5vgwVtYS5hCziyKp0-M2SA';
+
+function _sbHeaders(extra) {
+  return Object.assign({
+    'apikey': SB_KEY,
+    'Authorization': 'Bearer ' + SB_KEY,
+    'Content-Type': 'application/json',
+  }, extra);
+}
+
+window.fetchTopScores = async function() {
+  const res = await fetch(
+    SB_URL + '/rest/v1/scores?select=id,name,time_ms,created_at&order=time_ms.asc&limit=10',
+    { headers: _sbHeaders() }
+  );
+  if (!res.ok) throw new Error('fetchTopScores failed: ' + res.status + ' ' + await res.text());
+  return res.json();
+};
+
+window.submitScore = async function(name, time_ms) {
+  const res = await fetch(
+    SB_URL + '/rest/v1/scores',
+    {
+      method: 'POST',
+      headers: _sbHeaders({ 'Prefer': 'return=representation' }),
+      body: JSON.stringify({ name, time_ms }),
+    }
+  );
+  if (!res.ok) throw new Error('submitScore failed: ' + res.status + ' ' + await res.text());
+  const rows = await res.json();
+  return rows[0];
+};
+
 startBgFramePreload();
 loop();
 </script>
