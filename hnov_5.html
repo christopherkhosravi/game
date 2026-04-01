@@ -1335,7 +1335,7 @@ function _submitNameAndScore() {
   lbNameEntry = false;
   lbSubmitting = true;
   const name = lbName.join('').trimEnd() || 'ANON';
-  submitScore(name, timerFrozenMs).then(row => {
+  submitScore(name, Math.round(timerFrozenMs)).then(row => {
     lbSubmittedId = row ? row.id : null;
     return fetchTopScores();
   }).then(s => {
