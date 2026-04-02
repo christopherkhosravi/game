@@ -233,6 +233,10 @@ The stopwatch timer text is `88px "Courier New"`, displayed at `(CW/2, 24)` with
 - Aspect ratio preserved: dW/dH = 704/1280 = 0.55
 - Scroll and parallax logic unchanged
 
+## Drop-Shadow Ellipse Removed
+
+The `drawHnov()` function previously drew a semi-transparent black ellipse (`rgba(0,0,0,0.20)`, horizontal radius `SPRITE_W * 0.45`, vertical radius 3) just below the player's feet on every frame. It was unconditional — present in the air as well as on the ground. These five lines were removed entirely. No other sprite rendering was changed.
+
 ## One-Way (Pass-Through) Floating Platforms
 
 **What it does:** The 6 floating platforms (staticPlats indices 3–8) use `type:'pass'` instead of `type:'solid'`. The player lands on top but passes through freely from below and from the sides. The floor and walls remain `type:'solid'` and are unaffected.

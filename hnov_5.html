@@ -859,12 +859,6 @@ function drawHnov(wx, wy, facingRight, state, animFrame) {
 
   ctx.save();
 
-  // Drop shadow
-  ctx.fillStyle = 'rgba(0,0,0,0.20)';
-  ctx.beginPath();
-  ctx.ellipse(feetX, feetY + 1, SPRITE_W * 0.45, 3, 0, 0, Math.PI * 2);
-  ctx.fill();
-
   // Horizontal flip — run and wall sprites were exported mirrored, so invert for those states
   const mirrorStates = ['wall', 'dash'];
   const stateFlipped = mirrorStates.includes(state);
