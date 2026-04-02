@@ -314,28 +314,6 @@ Pattern 1,2,3,4,5,3 — no two adjacent platforms share the same image. Platform
 - Draw formula: `drawH = p.w * c.sh / c.sw` — visible content width fills the platform exactly, height scales proportionally. Overflow below platform bottom is intentional (not clipped).
 - Fallback: if image not yet loaded, draws the original brick fill
 
-## Building Image — Floor and Wall Visuals
-
-**What it does:** Replaces the brick/color fill on the floor (staticPlats index 0) and both side walls (indices 1–2) with crops from `animations/building.jpg` — a 1024×1024 JPEG pixel-art skyscraper. Collision boxes are unchanged.
-
-**Asset:** `animations/building.jpg` — 1024×1024 RGB JPEG (transparent background baked to white). Building content measured at x=279–756, y=58–1023 (478×966 px of actual pixel art).
-
-**Crop definitions (`BUILDING_CROP`):**
-| Key | sx | sy | sw | sh | Used for |
-|---|---|---|---|---|---|
-| `floor` | 279 | 58 | 478 | 160 | Floor rooftop strip — full building width, top portion |
-| `wallR` | 279 | 58 | 60 | 966 | Right game wall — left outer column of building |
-| `wallL` | 696 | 58 | 60 | 966 | Left game wall — right outer column of building |
-
-**Rendering logic (`drawWorld()`, pi < 3):**
-- **Floor (pi=0):** `dw = p.w` (776), `dh = p.w * sh/sw` — rooftop crop scaled to platform width, anchored at `p.y` (top of floor).
-- **Walls (pi=1,2):** `dw = p.w` (16), `dh = p.h` (1420) — column strip compressed to wall width, full wall height. Image bleeds slightly beyond hitbox — intentional per task spec.
-- **Fallback:** original brick fill if image not yet loaded.
-
-**Preload:** `BUILDING_IMG` declared just before `BILLBOARD_IMGS` block, same pattern.
-
-**Test:** Start game, walk to the floor — rooftop pixel art should be visible underfoot. Both side walls should show the building facade column strip.
-
 ## God Mode Cheat
 
 **What it does:** Typing the sequence `nggyu` (in order, any time during gameplay) toggles god mode on/off. While active: arrow keys fly the player freely; all gravity, friction, and collision are skipped; death (fall-out, hazards, enemies) is suppressed; a pink "GOD MODE" label appears top-right. Typing the sequence again turns it off. No effect on save state or normal gameplay.
