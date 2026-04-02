@@ -107,6 +107,9 @@ git push origin main:gh-pages
 - **Always push to gh-pages after every push to main** — the game is served from the gh-pages branch on GitHub Pages, so both branches must stay in sync.
 - **Always use GitHub as the source of truth.** Clone or pull from the remote repo at the start of every session before making any changes. Never assume local files are up to date.
 
+### Files and Assets
+- **Never ask the user to save files to their machine.** If a file needs to be added to the repo, push it to GitHub directly, then pull from remote. All files come from and go to the remote repo — do not instruct the user to manually place files locally.
+
 ### Verification
 - After any gameplay-affecting change, note what the user should test (e.g., "try jumping off the left wall on platform 3").
 - If a change touches physics or collision, call out which locked-layer constants were and were not modified.
