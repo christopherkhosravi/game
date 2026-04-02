@@ -450,9 +450,6 @@ function update() {
         if (p.animFrame < 3) p.animFrame++;
         else deathPhase = 'fallen';
       }
-    } else if (ry.landed) {
-      gameState = 'dead';
-      deadOverlayTimer = 0;
     }
     updateCamera();
     return;
@@ -762,6 +759,8 @@ function checkHazards() {
       p.dashGrace = 0;
       deathTimer = 0;
       deathPhase = 'dying';
+      gameState = 'dead';
+      deadOverlayTimer = 0;
       return;
     }
   }
@@ -1281,11 +1280,11 @@ function drawWin() {
 
 function drawDead() {
   deadOverlayTimer++;
-  ctx.fillStyle = `rgba(10,10,20,${Math.min(deadOverlayTimer/40,0.9)})`;
+  // t: 0→1 over 64 ticks (matches dying animation duration: 4 frames × 16 ticks)
+  const t = Math.min(deadOverlayTimer / 64, 1);
+  ctx.fillStyle = `rgba(10,10,20,${t * 0.9})`;
   ctx.fillRect(0,0,CW,CH);
-  if (deadOverlayTimer < 30) return;
 
-  const t = Math.min((deadOverlayTimer-30)/40, 1);
   ctx.save();
   ctx.translate(CW/2, CH/2);
   ctx.scale(0.5+t*0.5, 0.5+t*0.5);

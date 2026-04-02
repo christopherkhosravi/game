@@ -247,16 +247,18 @@ The stopwatch timer text is `88px "Courier New"`, displayed at `(CW/2, 24)` with
 ## Death Sequence
 
 **Phases:**
-1. **'dying'** — `p.dead = true`, `deathPhase = 'dying'`, `gameState` stays `'playing'`. Gravity (`FALL_G`) applies every tick. Dying animation advances at normal speed (16 ticks/frame, 4 frames, play-once). Player has no input. Camera follows.
-2. **'fallen'** — Animation held on last frame. Gravity continues. Waiting for `ry.landed` (ground contact via `resolveY`).
-3. **'dead'** — `gameState = 'dead'` set on landing. `drawDead()` shows dark overlay + "YOU DIED" + "R · RESTART". Player sprite redrawn above overlay (unblurred). Background and world rendered with `ctx.filter = 'blur(6px)'`. Pressing R calls `respawn()` and restores `gameState = 'playing'` with countdown.
+1. **'dying'** — `p.dead = true`, `deathPhase = 'dying'`, `gameState = 'dead'` all set simultaneously at death trigger (`checkHazards()`). `deadOverlayTimer` reset to 0. Gravity (`FALL_G`) applies every tick. Dying animation advances at 16 ticks/frame, 4 frames, play-once. Player has no input. Camera follows.
+2. **'fallen'** — Animation held on last frame (animFrame=3). Gravity continues. Character falls until `ry.landed`. No special transition needed — `gameState` is already `'dead'`.
+
+**Timing synchronisation:** All three visual elements — blur, dark overlay, "YOU DIED" panel — start the instant death is triggered. `drawDead()` uses a single `t = deadOverlayTimer / 64` ramp (64 ticks = 4 frames × 16 ticks, matching the animation duration exactly). At t=0 everything is invisible; at t=1 overlay is at full opacity (0.9), panel is full size and alpha 1. The blur (`ctx.filter = 'blur(6px)'`) is always active when `gameState === 'dead'`.
 
 **Key variables:**
 - `deathPhase` — `'dying'` | `'fallen'`; initialized in `checkHazards()` enemy collision block; reset to `'dying'` in R-key handler.
-- `deadOverlayTimer` — incremented in `drawDead()`, drives the panel fade-in.
+- `deadOverlayTimer` — incremented in `drawDead()`, single 0→64 ramp driving all overlay elements simultaneously. Reset to 0 at death trigger and on restart.
 
 **Implementation notes:**
-- The `p.dead` block in `update()` fully replaces the old timer-based logic (`deathTimer % 60`).
+- `gameState = 'dead'` is now set at the death trigger (not on landing), so blur/overlay and animation all start together.
+- The `p.dead` block in `update()` no longer sets `gameState = 'dead'` — that moved to `checkHazards()`.
 - `updateCamera()` is called inside the dead block (before `return`) so the camera follows the falling player.
 - R-key `startGame()` path is guarded with `&& !player.dead` to prevent interrupting the death animation.
 - In `render()`, `ctx.filter = 'blur(6px)'` is set before background/world draws and reset to `'none'` after; then `drawDead()` draws the panel; then `drawHnov()` is called a second time (with the 2× scale + camera translate from `ctx.save()`) to place the player sprite above and unblurred.
