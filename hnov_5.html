@@ -811,8 +811,15 @@ const BILLBOARD_IMGS = [];
 // Map floating-platform slot (0–5) to BILLBOARD_IMGS index (0–4)
 // Pattern 1,2,3,4,5,3 — no two adjacent platforms share the same image
 const BILLBOARD_PLAT_MAP = [0, 1, 2, 3, 4, 2];
-// First non-transparent row (px) per billboard image — used to align visible content to platform top
-const BILLBOARD_TOP_PAD = [225, 224, 225, 225, 224];
+// Visible content bounding box per billboard (px, measured from transparent edges via Pillow)
+// { sx, sy, sw, sh } = source crop rect; all images are 1024×1024
+const BILLBOARD_CROP = [
+  {sx:165, sy:225, sw:694, sh:601}, // billboard_1
+  {sx:165, sy:224, sw:694, sh:602}, // billboard_2
+  {sx:165, sy:225, sw:694, sh:601}, // billboard_3
+  {sx:165, sy:225, sw:694, sh:601}, // billboard_4
+  {sx:165, sy:224, sw:694, sh:602}, // billboard_5
+];
 
 function updateBgVideo() {
   if (bgDir === 1) {
@@ -932,10 +939,9 @@ function drawWorld() {
       // floating platforms — draw billboard PNG scaled to platform dimensions
       const img = BILLBOARD_IMGS[BILLBOARD_PLAT_MAP[pi - 3]];
       if (img.complete && img.naturalWidth > 0) {
-        const drawH = p.w * img.naturalHeight / img.naturalWidth;
-        const topPad = BILLBOARD_TOP_PAD[BILLBOARD_PLAT_MAP[pi - 3]];
-        const topPadScaled = topPad * drawH / img.naturalHeight;
-        ctx.drawImage(img, p.x, p.y - topPadScaled, p.w, drawH);
+        const c = BILLBOARD_CROP[BILLBOARD_PLAT_MAP[pi - 3]];
+        const drawH = p.w * c.sh / c.sw;
+        ctx.drawImage(img, c.sx, c.sy, c.sw, c.sh, p.x, p.y, p.w, drawH);
       } else {
         // fallback while image loads
         r(p.x, p.y+3, p.w, p.h-3, P.plat1);

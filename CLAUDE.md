@@ -255,6 +255,7 @@ Pattern 1,2,3,4,5,3 — no two adjacent platforms share the same image. Platform
 - `BILLBOARD_IMGS` — array of 5 `Image` objects preloaded at startup (after background frame loader)
 - `BILLBOARD_PLAT_MAP` — `[0,1,2,3,4,2]` maps floating-platform slot to `BILLBOARD_IMGS` index
 - `drawWorld()` platform loop converted from `for…of` to indexed `for` loop; `pi >= 3` branches to billboard drawing (drawn in 2× world-scale context, so world coords are used directly)
-- Drawing formula: `drawH = p.w * img.naturalHeight / img.naturalWidth` — preserves aspect ratio at full platform width. Overflow below the platform bottom is intentional (not clipped).
-- Top-padding alignment: `BILLBOARD_TOP_PAD = [225, 224, 225, 225, 224]` stores the first non-transparent row (px) for each of the 5 billboard images (measured via Pillow). The draw Y is shifted up by `topPad * drawH / img.naturalHeight` so visible content aligns to `p.y` instead of image origin. The transparent area floats above the platform.
+- Drawing uses the 9-argument `drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh)` to crop transparent padding from the source before scaling.
+- `BILLBOARD_CROP` stores the visible content bounding box for each image (measured via Pillow): all 5 images share `sx=165, sw=694`; `sy` is 225 (images 1,3,4) or 224 (images 2,5); `sh` is 601 or 602. Left/right padding is 165px each, top ~225px, bottom ~198px, out of a 1024×1024 canvas.
+- Draw formula: `drawH = p.w * c.sh / c.sw` — visible content width fills the platform exactly, height scales proportionally. Overflow below platform bottom is intentional (not clipped).
 - Fallback: if image not yet loaded, draws the original brick fill
