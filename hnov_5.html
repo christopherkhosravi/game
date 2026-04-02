@@ -374,6 +374,7 @@ let deathTimer = 0;
 let deadOverlayTimer = 0;
 let deathPhase = 'dying'; // 'dying' | 'fallen'
 let screenShake = 0;
+let godMode = false;
 
 // spawn countdown & run timer
 let countdown = -1;      // 3,2,1 = digit; 0 = "GO!"; -1 = inactive
@@ -413,6 +414,22 @@ function update() {
       timerRunning = true;
       timerStartTime = performance.now();
     }
+    updateCamera();
+    return;
+  }
+
+  // — god mode flight —
+  if (godMode) {
+    const p = player;
+    p.dead = false;
+    const GM_SPEED = 5;
+    if (keys['ArrowLeft'])  { p.x -= GM_SPEED; p.facingRight = false; }
+    if (keys['ArrowRight']) { p.x += GM_SPEED; p.facingRight = true; }
+    if (keys['ArrowUp'])    p.y -= GM_SPEED;
+    if (keys['ArrowDown'])  p.y += GM_SPEED;
+    p.vx = 0; p.vy = 0;
+    particles = particles.filter(pt => { pt.x += pt.vx; pt.y += pt.vy; pt.vy += 0.15; pt.vx *= 0.92; pt.life--; return pt.life > 0; });
+    if (screenShake > 0) screenShake--;
     updateCamera();
     return;
   }
@@ -1520,6 +1537,14 @@ function render() {
     ctx.restore();
   }
   if (gameState === 'playing') drawSpawnTimer();
+  if (godMode) {
+    ctx.font = 'bold 18px "Courier New"';
+    ctx.fillStyle = '#ff6b9d';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.fillText('GOD MODE', CW - 16, 16);
+    ctx.textAlign = 'left';
+  }
   if (lbTitleShow) drawTitleLeaderboard();
 }
 
@@ -1551,10 +1576,19 @@ function startGame() {
   document.getElementById('overlay').classList.add('hidden');
 }
 
+// God mode cheat — type "nggyu" during gameplay to toggle
+const _godSeq = ['KeyN','KeyG','KeyG','KeyY','KeyU'];
+let _godIdx = 0;
 document.addEventListener('keydown', e => {
   if (lbNameEntry) {
     _nameEntryKey(e.code);
     return;
+  }
+  if (e.code === _godSeq[_godIdx]) {
+    _godIdx++;
+    if (_godIdx === _godSeq.length) { godMode = !godMode; _godIdx = 0; }
+  } else {
+    _godIdx = (e.code === _godSeq[0]) ? 1 : 0;
   }
   if (lbTitleShow && e.code === 'Escape') {
     lbTitleShow = false;

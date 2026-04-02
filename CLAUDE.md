@@ -336,6 +336,19 @@ Pattern 1,2,3,4,5,3 — no two adjacent platforms share the same image. Platform
 
 **Test:** Start game, walk to the floor — rooftop pixel art should be visible underfoot. Both side walls should show the building facade column strip.
 
+## God Mode Cheat
+
+**What it does:** Typing the sequence `nggyu` (in order, any time during gameplay) toggles god mode on/off. While active: arrow keys fly the player freely; all gravity, friction, and collision are skipped; death (fall-out, hazards, enemies) is suppressed; a pink "GOD MODE" label appears top-right. Typing the sequence again turns it off. No effect on save state or normal gameplay.
+
+**Key variables:**
+- `godMode` (bool) — declared in GAME STATE section alongside `screenShake`.
+- `_godSeq` / `_godIdx` — sequence array `['KeyN','KeyG','KeyG','KeyY','KeyU']` and current match index, declared just before the second `keydown` listener in INIT.
+
+**Implementation:**
+- **Sequence detection:** Second `keydown` listener checks each key against `_godSeq[_godIdx]`. On full match, toggles `godMode` and resets index. On mismatch, resets (or advances to 1 if the key matches the first step, to handle partial overlaps).
+- **Flight block:** Inserted in `update()` immediately after the countdown early-return. If `godMode`: clears `p.dead`, moves player with `ArrowLeft/Right/Up/Down` at 5 px/frame, zeroes `vx/vy`, advances particles, decrements screen shake, calls `updateCamera()`, then returns — skipping all physics, collision, hazard, and win checks.
+- **Indicator:** In `render()` after `drawSpawnTimer()`: draws `'GOD MODE'` in `#ff6b9d` bold Courier New 18px, right-aligned at `(CW-16, 16)`.
+
 ## Wall Slide Entry Cost
 
 **What it does:** On fresh wall contact (player was not touching the wall the previous frame), 30 points are instantly deducted from `wallMeter`. If the meter drops to 0, `wallContact` and `wallDir` are cleared immediately so the player falls instead of sliding. This cost applies to wall slide only — dead hang (`floatMeter`) is unaffected.
