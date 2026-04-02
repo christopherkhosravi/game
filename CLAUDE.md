@@ -233,6 +233,18 @@ The stopwatch timer text is `88px "Courier New"`, displayed at `(CW/2, 24)` with
 - Aspect ratio preserved: dW/dH = 704/1280 = 0.55
 - Scroll and parallax logic unchanged
 
+## One-Way (Pass-Through) Floating Platforms
+
+**What it does:** The 6 floating platforms (staticPlats indices 3–8) use `type:'pass'` instead of `type:'solid'`. The player lands on top but passes through freely from below and from the sides. The floor and walls remain `type:'solid'` and are unaffected.
+
+**How it works:** The collision helpers already segregate by type:
+- `resolveY` top-landing check runs for all types — no change needed.
+- `resolveY` ceiling check is guarded by `if (p.type === 'solid')` — so jumping into the underside has no effect on `'pass'` platforms.
+- `resolveX` skips any platform where `type !== 'solid'` — so walking into the side has no effect.
+- Wall-contact detection (line ~512) is also `solid`-only.
+
+The entire fix is changing `type:'solid'` → `type:'pass'` on the 6 floating platform entries in `staticPlats`.
+
 ## Billboard Platform Visuals
 
 **What it does:** The 6 floating platforms (staticPlats indices 3–8) are drawn as scaled billboard PNG images instead of the default brick/color fill. Collision boxes are unchanged — only the visual rendering differs. The floor (index 0) and walls (indices 1–2) keep their original appearance.

@@ -161,12 +161,12 @@ const staticPlats = [
   {x:32,     y:GROUND_Y, w:LW-64, h:40,  type:'solid'}, // floor — inset from walls (16-unit gap each side)
   {x:0,      y:LH-1420,  w:16,   h:1420, type:'solid'}, // left wall  — base at level bottom, rises upward
   {x:LW-16,  y:LH-1420,  w:16,   h:1420, type:'solid'}, // right wall — same; gap is horizontal beside floor
-  {x:80,     y:1000,     w:120, h:16,   type:'solid'}, // platform 1 (lower)
-  {x:560,    y:770,      w:120, h:16,   type:'solid'}, // platform 2 (upper)
-  {x:90,     y:570,      w:130, h:16,   type:'solid'}, // platform 3 — left, wall-jump reach from plat 2
-  {x:560,    y:390,      w:130, h:16,   type:'solid'}, // platform 4 — right, wall-jump + bounce reach
-  {x:90,     y:220,      w:130, h:16,   type:'solid'}, // platform 5 — left, wall-jump reach from plat 4
-  {x:300,    y:80,       w:220, h:16,   type:'solid'}, // platform 6 — top, wide landing pad for goal
+  {x:80,     y:1000,     w:120, h:16,   type:'pass'}, // platform 1 (lower)
+  {x:560,    y:770,      w:120, h:16,   type:'pass'}, // platform 2 (upper)
+  {x:90,     y:570,      w:130, h:16,   type:'pass'}, // platform 3 — left, wall-jump reach from plat 2
+  {x:560,    y:390,      w:130, h:16,   type:'pass'}, // platform 4 — right, wall-jump + bounce reach
+  {x:90,     y:220,      w:130, h:16,   type:'pass'}, // platform 5 — left, wall-jump reach from plat 4
+  {x:300,    y:80,       w:220, h:16,   type:'pass'}, // platform 6 — top, wide landing pad for goal
 ];
 
 // moving platforms {x,y,w,h, ox,oy, dx,dy, range, t}
