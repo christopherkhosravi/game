@@ -66,7 +66,7 @@ These systems are tuned and intentional. Do not modify them unless the user spec
 - **Player hitbox** (w:12, h:16) and sprite anchor math in `drawHnov()`
 - **Platform layout** (`staticPlats` array) and goal position
 - **Camera system** — lerp factor, clamping logic, 2x scale relationship
-- **Control mapping** — WASD/arrows, Space, Q/E, R
+- **Control mapping** — WASD only (arrows removed), Space, double-tap A/D for dash, R
 
 ## GitHub Pages Deployment
 
@@ -232,6 +232,17 @@ The stopwatch timer text is `88px "Courier New"`, displayed at `(CW/2, 24)` with
 - dH = 1280 * bgScale = ~3054.5 (portrait height scaled proportionally)
 - Aspect ratio preserved: dW/dH = 704/1280 = 0.55
 - Scroll and parallax logic unchanged
+
+## Control Remapping — WASD Only, Double-Tap Dash
+
+**What changed:**
+- Arrow keys removed from all `press()`/`jp()`/`jr()` calls — WASD is the sole movement input.
+- Q and E dash bindings removed.
+- Dash is now triggered by double-tapping A (dash left) or D (dash right) within a 250 ms window.
+- `e.preventDefault()` narrowed from all arrow keys + Space to Space only.
+- Title screen overlay and bottom controls bar updated to reflect new bindings.
+
+**Implementation:** Two module-level variables `_lastAPress` and `_lastDPress` (timestamps, ms) are declared alongside `justPressed`/`justReleased`. The first `keydown` listener checks `performance.now() - _lastXPress < 250` on the leading edge of each KeyA/KeyD press (guarded by `!keys[e.code]` so held keys don't retrigger). On a qualifying double-tap it injects a virtual key `'DashLeft'` or `'DashRight'` into `justPressed`, which the existing `dashQP`/`dashEP` variables consume via `jp(['DashLeft'])` / `jp(['DashRight'])`. The dash activation and physics block are otherwise unchanged.
 
 ## Drop-Shadow Ellipse Removed
 

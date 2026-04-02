@@ -96,10 +96,10 @@ body{
       <div id="overlayTitle">HNOV</div>
       <div id="overlayName">a movement story</div>
       <div id="overlayMsg">
-        ARROWS / WASD · move<br>
+        WASD · move<br>
         SPACE · jump · SPACE again (air) · bounce<br>
-        Q · dash left · E · dash right (recharges on land)<br>
-        S / DOWN (air) · float (hold to glide)<br>
+        AA · dash left · DD · dash right (recharges on land)<br>
+        S (air) · float (hold to glide)<br>
         INTO WALL · wall slide &amp; sit<br>
         JUMP off wall · wall jump
       </div>
@@ -109,7 +109,7 @@ body{
   </div>
 </div>
 <div id="controls">
-  <span>Q</span> DASH LEFT &nbsp;·&nbsp; <span>E</span> DASH RIGHT &nbsp;·&nbsp; <span>SPACE SPACE</span> BOUNCE &nbsp;·&nbsp; <span>S/↓</span> FLOAT &nbsp;·&nbsp; <span>R</span> RESTART
+  <span>AA</span> DASH LEFT &nbsp;·&nbsp; <span>DD</span> DASH RIGHT &nbsp;·&nbsp; <span>SPACE SPACE</span> BOUNCE &nbsp;·&nbsp; <span>S</span> FLOAT &nbsp;·&nbsp; <span>R</span> RESTART
 </div>
 
 <script>
@@ -277,10 +277,22 @@ function spawnParticles(x, y, color, count, vxRange, vyRange, life) {
 const keys = {};
 const justPressed = {};
 const justReleased = {};
+let _lastAPress = 0, _lastDPress = 0;
 document.addEventListener('keydown', e => {
-  if (!keys[e.code]) justPressed[e.code] = true;
+  if (!keys[e.code]) {
+    justPressed[e.code] = true;
+    const now = performance.now();
+    if (e.code === 'KeyA') {
+      if (now - _lastAPress < 250) justPressed['DashLeft'] = true;
+      _lastAPress = now;
+    }
+    if (e.code === 'KeyD') {
+      if (now - _lastDPress < 250) justPressed['DashRight'] = true;
+      _lastDPress = now;
+    }
+  }
   keys[e.code] = true;
-  if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+  if (e.code === 'Space') e.preventDefault();
 });
 document.addEventListener('keyup', e => {
   keys[e.code] = false;
@@ -440,14 +452,14 @@ function update() {
   }
 
   // — inputs —
-  const left   = press(['ArrowLeft','KeyA']);
-  const right  = press(['ArrowRight','KeyD']);
-  const down   = press(['ArrowDown','KeyS']);
-  const jumpP  = jp(['Space','ArrowUp','KeyW']);
-  const jumpH  = press(['Space','ArrowUp','KeyW']);
-  const jumpR  = jr(['Space','ArrowUp','KeyW']);
-  const dashQP = jp(['KeyQ']);
-  const dashEP = jp(['KeyE']);
+  const left   = press(['KeyA']);
+  const right  = press(['KeyD']);
+  const down   = press(['KeyS']);
+  const jumpP  = jp(['Space','KeyW']);
+  const jumpH  = press(['Space','KeyW']);
+  const jumpR  = jr(['Space','KeyW']);
+  const dashQP = jp(['DashLeft']);
+  const dashEP = jp(['DashRight']);
   const restP  = jp(['KeyR']);
 
   if (restP) { respawn(); return; }
