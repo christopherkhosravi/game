@@ -835,6 +835,16 @@ function startBgFramePreload() {
   bgFrameIndex = 0;
 }
 
+// Building image — floor (rooftop) and wall visuals (staticPlats indices 0–2)
+const BUILDING_IMG = new Image();
+BUILDING_IMG.src = 'animations/building.jpg';
+// Crop rects into the 1024×1024 JPEG; building content measured at x=279–756, y=58–1023
+const BUILDING_CROP = {
+  floor: {sx:279, sy:58,  sw:478, sh:160}, // rooftop strip — full building width, top portion
+  wallR: {sx:279, sy:58,  sw:60,  sh:966}, // right game wall — left outer column of building
+  wallL: {sx:696, sy:58,  sw:60,  sh:966}, // left game wall  — right outer column of building
+};
+
 // Billboard images — one per floating platform (staticPlats indices 3–8)
 const BILLBOARD_IMGS = [];
 (function() {
@@ -979,15 +989,26 @@ function drawWorld() {
       }
       continue;
     }
-    r(p.x, p.y+3, p.w, p.h-3, P.plat1);
-    r(p.x, p.y, p.w, 3, P.platTop);
-    // subtle glow line
-    ctx.fillStyle = P.platGlow;
-    ctx.fillRect(p.x+1, p.y+1, p.w-2, 1);
-    // brick pattern
-    for (let bx = p.x; bx < p.x+p.w; bx+=16) {
-      ctx.fillStyle = P.plat2;
-      ctx.fillRect(bx, p.y+4, 1, p.h-6);
+    if (BUILDING_IMG.complete && BUILDING_IMG.naturalWidth > 0) {
+      if (pi === 0) {
+        // floor — rooftop crop, scaled to platform width, anchored at top
+        const c = BUILDING_CROP.floor;
+        const dh = p.w * c.sh / c.sw;
+        ctx.drawImage(BUILDING_IMG, c.sx, c.sy, c.sw, c.sh, p.x, p.y, p.w, dh);
+      } else {
+        // walls — left or right outer building column, scaled to full wall height
+        const c = (pi === 1) ? BUILDING_CROP.wallL : BUILDING_CROP.wallR;
+        ctx.drawImage(BUILDING_IMG, c.sx, c.sy, c.sw, c.sh, p.x, p.y, p.w, p.h);
+      }
+    } else {
+      r(p.x, p.y+3, p.w, p.h-3, P.plat1);
+      r(p.x, p.y, p.w, 3, P.platTop);
+      ctx.fillStyle = P.platGlow;
+      ctx.fillRect(p.x+1, p.y+1, p.w-2, 1);
+      for (let bx = p.x; bx < p.x+p.w; bx+=16) {
+        ctx.fillStyle = P.plat2;
+        ctx.fillRect(bx, p.y+4, 1, p.h-6);
+      }
     }
   }
 
