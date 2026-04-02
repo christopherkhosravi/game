@@ -864,7 +864,7 @@ function drawHnov(wx, wy, facingRight, state, animFrame) {
   const feetX = wx + 6;   // hitbox centre-x (w=12)
   const feetY = wy + 16;  // hitbox bottom   (h=16)
 
-  const groundStates = ['idle', 'run', 'dying'];
+  const groundStates = ['idle', 'run', 'dying', 'dash'];
   const yOffset = groundStates.includes(state) ? 8 : 0;
   const dx = feetX - SPRITE_W / 2;
   const dy = feetY - SPRITE_H + yOffset;

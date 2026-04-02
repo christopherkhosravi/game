@@ -244,6 +244,10 @@ The stopwatch timer text is `88px "Courier New"`, displayed at `(CW/2, 24)` with
 
 **Implementation:** Two module-level variables `_lastAPress` and `_lastDPress` (timestamps, ms) are declared alongside `justPressed`/`justReleased`. The first `keydown` listener checks `performance.now() - _lastXPress < 250` on the leading edge of each KeyA/KeyD press (guarded by `!keys[e.code]` so held keys don't retrigger). On a qualifying double-tap it injects a virtual key `'DashLeft'` or `'DashRight'` into `justPressed`, which the existing `dashQP`/`dashEP` variables consume via `jp(['DashLeft'])` / `jp(['DashRight'])`. The dash activation and physics block are otherwise unchanged.
 
+## Dash Ground Alignment Fix
+
+The `groundStates` array in `drawHnov()` controls which states receive a `+8 px` downward draw offset to compensate for transparent padding at the bottom of sprite PNGs. `'dash'` was missing from this list, causing the sprite to float 8 px above the ground during a ground dash. Adding `'dash'` to `groundStates` applies the same compensation as idle and run.
+
 ## Drop-Shadow Ellipse Removed
 
 The `drawHnov()` function previously drew a semi-transparent black ellipse (`rgba(0,0,0,0.20)`, horizontal radius `SPRITE_W * 0.45`, vertical radius 3) just below the player's feet on every frame. It was unconditional — present in the air as well as on the ground. These five lines were removed entirely. No other sprite rendering was changed.
