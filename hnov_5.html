@@ -397,7 +397,7 @@ let lbTitleLoading = false;
 
 // ─── UPDATE ──────────────────────────────────────────────────────────────────
 function update() {
-  if (gameState !== 'playing') return;
+  if (gameState !== 'playing' && !(gameState === 'dead' && player.dead)) return;
   frame++;
 
   // — spawn countdown (input disabled until countdown finishes) —
