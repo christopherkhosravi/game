@@ -105,6 +105,7 @@ git push origin main:gh-pages
 - Do not push unless the user explicitly asks.
 - Keep commit messages short (1–2 lines) and focused on what changed and why.
 - **Always push to gh-pages after every push to main** — the game is served from the gh-pages branch on GitHub Pages, so both branches must stay in sync.
+- **Always use GitHub as the source of truth.** Clone or pull from the remote repo at the start of every session before making any changes. Never assume local files are up to date.
 
 ### Verification
 - After any gameplay-affecting change, note what the user should test (e.g., "try jumping off the left wall on platform 3").
