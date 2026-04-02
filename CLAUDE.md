@@ -309,3 +309,28 @@ Pattern 1,2,3,4,5,3 — no two adjacent platforms share the same image. Platform
 - `BILLBOARD_CROP` stores the visible content bounding box for each image (measured via Pillow): all 5 images share `sx=165, sw=694`; `sy` is 225 (images 1,3,4) or 224 (images 2,5); `sh` is 601 or 602. Left/right padding is 165px each, top ~225px, bottom ~198px, out of a 1024×1024 canvas.
 - Draw formula: `drawH = p.w * c.sh / c.sw` — visible content width fills the platform exactly, height scales proportionally. Overflow below platform bottom is intentional (not clipped).
 - Fallback: if image not yet loaded, draws the original brick fill
+
+## Wall Slide Entry Cost
+
+**What it does:** On fresh wall contact (player was not touching the wall the previous frame), 30 points are instantly deducted from `wallMeter`. If the meter drops to 0, `wallContact` and `wallDir` are cleared immediately so the player falls instead of sliding. This cost applies to wall slide only — dead hang (`floatMeter`) is unaffected.
+
+**Key variable:** `prevWallContact` (bool) added to `makePlayer()`. Tracks whether the player was wall-sliding last frame. Initialized to `false`; reset automatically on `respawn()` via `makePlayer()`.
+
+**Implementation (wall meter block, ~line 549):**
+```
+if (p.wallContact) {
+  if (!p.prevWallContact) {
+    p.wallMeter = Math.max(0, p.wallMeter - 30);
+    if (p.wallMeter === 0) { p.wallContact = false; p.wallDir = 0; }
+  }
+  if (p.wallContact) {
+    p.wallMeter = Math.max(0, p.wallMeter - 1);
+    if (p.wallMeter === 0) { p.wallContact = false; p.wallDir = 0; }
+  }
+} else if (p.onGround) {
+  p.wallMeter = Math.min(100, p.wallMeter + 2);
+}
+p.prevWallContact = p.wallContact;
+```
+
+**Test:** Grab a wall with a full meter and verify the meter jumps down 30% immediately. Then let it drain to ~25%, leave the wall, touch it again — player should fall instantly (meter clamped to 0, no slide).
