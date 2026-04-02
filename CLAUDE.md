@@ -254,5 +254,6 @@ Pattern 1,2,3,4,5,3 — no two adjacent platforms share the same image. Platform
 **Implementation:**
 - `BILLBOARD_IMGS` — array of 5 `Image` objects preloaded at startup (after background frame loader)
 - `BILLBOARD_PLAT_MAP` — `[0,1,2,3,4,2]` maps floating-platform slot to `BILLBOARD_IMGS` index
-- `drawWorld()` platform loop converted from `for…of` to indexed `for` loop; `pi >= 3` branches to `ctx.drawImage(img, p.x, p.y, p.w, p.h)` (drawn in 2× world-scale context, so world coords are used directly)
+- `drawWorld()` platform loop converted from `for…of` to indexed `for` loop; `pi >= 3` branches to billboard drawing (drawn in 2× world-scale context, so world coords are used directly)
+- Drawing formula: `drawH = p.w * img.naturalHeight / img.naturalWidth` — preserves aspect ratio at full platform width, top-aligned to `p.y`. Overflow below the platform bottom is intentional (not clipped).
 - Fallback: if image not yet loaded, draws the original brick fill

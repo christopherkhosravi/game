@@ -930,7 +930,8 @@ function drawWorld() {
       // floating platforms — draw billboard PNG scaled to platform dimensions
       const img = BILLBOARD_IMGS[BILLBOARD_PLAT_MAP[pi - 3]];
       if (img.complete && img.naturalWidth > 0) {
-        ctx.drawImage(img, p.x, p.y, p.w, p.h);
+        const drawH = p.w * img.naturalHeight / img.naturalWidth;
+        ctx.drawImage(img, p.x, p.y, p.w, drawH);
       } else {
         // fallback while image loads
         r(p.x, p.y+3, p.w, p.h-3, P.plat1);
