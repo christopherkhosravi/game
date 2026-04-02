@@ -244,6 +244,23 @@ The stopwatch timer text is `88px "Courier New"`, displayed at `(CW/2, 24)` with
 
 **Implementation:** Two module-level variables `_lastAPress` and `_lastDPress` (timestamps, ms) are declared alongside `justPressed`/`justReleased`. The first `keydown` listener checks `performance.now() - _lastXPress < 250` on the leading edge of each KeyA/KeyD press (guarded by `!keys[e.code]` so held keys don't retrigger). On a qualifying double-tap it injects a virtual key `'DashLeft'` or `'DashRight'` into `justPressed`, which the existing `dashQP`/`dashEP` variables consume via `jp(['DashLeft'])` / `jp(['DashRight'])`. The dash activation and physics block are otherwise unchanged.
 
+## Death Sequence
+
+**Phases:**
+1. **'dying'** — `p.dead = true`, `deathPhase = 'dying'`, `gameState` stays `'playing'`. Gravity (`FALL_G`) applies every tick. Dying animation advances at normal speed (16 ticks/frame, 4 frames, play-once). Player has no input. Camera follows.
+2. **'fallen'** — Animation held on last frame. Gravity continues. Waiting for `ry.landed` (ground contact via `resolveY`).
+3. **'dead'** — `gameState = 'dead'` set on landing. `drawDead()` shows dark overlay + "YOU DIED" + "R · RESTART". Player sprite redrawn above overlay (unblurred). Background and world rendered with `ctx.filter = 'blur(6px)'`. Pressing R calls `respawn()` and restores `gameState = 'playing'` with countdown.
+
+**Key variables:**
+- `deathPhase` — `'dying'` | `'fallen'`; initialized in `checkHazards()` enemy collision block; reset to `'dying'` in R-key handler.
+- `deadOverlayTimer` — incremented in `drawDead()`, drives the panel fade-in.
+
+**Implementation notes:**
+- The `p.dead` block in `update()` fully replaces the old timer-based logic (`deathTimer % 60`).
+- `updateCamera()` is called inside the dead block (before `return`) so the camera follows the falling player.
+- R-key `startGame()` path is guarded with `&& !player.dead` to prevent interrupting the death animation.
+- In `render()`, `ctx.filter = 'blur(6px)'` is set before background/world draws and reset to `'none'` after; then `drawDead()` draws the panel; then `drawHnov()` is called a second time (with the 2× scale + camera translate from `ctx.save()`) to place the player sprite above and unblurred.
+
 ## Dash Ground Alignment Fix
 
 The `groundStates` array in `drawHnov()` controls which states receive a `+8 px` downward draw offset to compensate for transparent padding at the bottom of sprite PNGs. `'dash'` was missing from this list, causing the sprite to float 8 px above the ground during a ground dash. Adding `'dash'` to `groundStates` applies the same compensation as idle and run.

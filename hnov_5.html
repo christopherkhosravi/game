@@ -371,6 +371,7 @@ let frame = 0;
 let winTimer = 0;
 let deathTimer = 0;
 let deadOverlayTimer = 0;
+let deathPhase = 'dying'; // 'dying' | 'fallen'
 let screenShake = 0;
 
 // spawn countdown & run timer
@@ -433,13 +434,27 @@ function update() {
 
   const p = player;
   if (p.dead) {
-    // stop and reset timer immediately on death
     timerRunning = false;
     timerFrozenMs = 0;
-    // advance dying animation at 1 frame per 60 game ticks (4 frames × 60 = 240 ticks = 4 s)
-    deathTimer++;
-    if (deathTimer % 60 === 0 && p.animFrame < 3) p.animFrame++;
-    if (deathTimer >= 240) { gameState = 'dead'; deadOverlayTimer = 0; }
+    // Gravity applies throughout both death phases
+    p.vy += FALL_G;
+    if (p.vy > MAX_FALL) p.vy = MAX_FALL;
+    p.y += p.vy;
+    const ry = resolveY(p.x, p.y, p.w, p.h, p.vy);
+    p.y = ry.py; p.vy = ry.vy;
+    if (deathPhase === 'dying') {
+      // Advance dying animation at normal speed (16 ticks/frame), play once
+      p.animT++;
+      if (p.animT >= 16) {
+        p.animT = 0;
+        if (p.animFrame < 3) p.animFrame++;
+        else deathPhase = 'fallen';
+      }
+    } else if (ry.landed) {
+      gameState = 'dead';
+      deadOverlayTimer = 0;
+    }
+    updateCamera();
     return;
   }
 
@@ -746,6 +761,7 @@ function checkHazards() {
       p.dashTimer = 0;
       p.dashGrace = 0;
       deathTimer = 0;
+      deathPhase = 'dying';
       return;
     }
   }
@@ -1290,7 +1306,7 @@ function drawDead() {
   ctx.fillText('YOU DIED', 0, -12);
   ctx.fillStyle = '#6a5acd';
   ctx.font = '10px monospace';
-  ctx.fillText('PRESS R TO CONTINUE', 0, 16);
+  ctx.fillText('R · RESTART', 0, 16);
   ctx.restore();
 }
 
@@ -1458,12 +1474,22 @@ function drawSpawnTimer() {
 // ─── RENDER ──────────────────────────────────────────────────────────────────
 function render() {
   ctx.clearRect(0,0,CW,CH);
+  if (gameState === 'dead') ctx.filter = 'blur(6px)';
   drawBackground();
   if (gameState === 'playing' || gameState === 'win' || gameState === 'dead') drawWorld();
+  if (gameState === 'dead') ctx.filter = 'none';
   drawScanlines();
   drawVignette();
   if (gameState === 'win') drawWin();
-  if (gameState === 'dead') drawDead();
+  if (gameState === 'dead') {
+    drawDead();
+    // Redraw player above the overlay, unblurred
+    ctx.save();
+    ctx.scale(2, 2);
+    ctx.translate(-Math.round(cam.x), -Math.round(cam.y));
+    drawHnov(player.x, player.y, player.facingRight, player.state, player.animFrame);
+    ctx.restore();
+  }
   if (gameState === 'playing') drawSpawnTimer();
   if (lbTitleShow) drawTitleLeaderboard();
 }
@@ -1506,12 +1532,13 @@ document.addEventListener('keydown', e => {
     document.getElementById('overlay').classList.remove('hidden');
     return;
   }
-  if (e.code === 'KeyR' && (gameState === 'playing' || gameState === 'win')) {
+  if (e.code === 'KeyR' && (gameState === 'playing' || gameState === 'win') && !player.dead) {
     startGame();
   }
   if (e.code === 'KeyR' && gameState === 'dead') {
     deathTimer = 0;
     deadOverlayTimer = 0;
+    deathPhase = 'dying';
     respawn();
     gameState = 'playing';
   }
