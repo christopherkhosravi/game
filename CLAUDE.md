@@ -20,6 +20,7 @@ game/
 │   │   ├── background.mp4          (source video, not used in game)
 │   │   └── frames/
 │   │       └── frame_001–161.jpg   (animated background sequence)
+│   ├── building_prepped.png      (building sprite, 287×984 RGBA — parapet strip used for floor)
 │   ├── countdown_3.png           (countdown sprite, step 3)
 │   ├── countdown_2.png           (countdown sprite, step 2)
 │   ├── countdown_1.png           (countdown sprite, step 1)
@@ -351,3 +352,25 @@ p.prevWallContact = p.wallContact;
 ```
 
 **Test:** Grab a wall with a full meter and verify the meter jumps down 30% immediately. Then let it drain to ~25%, leave the wall, touch it again — player should fall instantly (meter clamped to 0, no slide).
+
+## Floor Visual — Building Parapet Strip
+
+**What it does:** The floor platform (staticPlats[0]) is drawn as a cropped strip of the building rooftop image instead of the default brick fill. Walls (staticPlats[1–2]) are unaffected. Collision box is unchanged.
+
+**Asset:** `animations/building_prepped.png` — 287×984 RGBA PNG of a pixel-art building. The parapet (rooftop edge with AC units) occupies the very top of the image.
+
+**Source crop:** `sx=0, sy=0, sw=287, sh=39` — top ~4% of image height (39px), full width.
+
+**Draw formula:**
+- `drawH = p.w * c.sh / c.sw` = 776 × 39 / 287 ≈ 105.4 world units (proportional height)
+- `drawY = p.y + (p.h - drawH) / 2` — centred on the 40-unit-tall hitbox, overflowing ~33 units above and below
+- `dx = p.x` (floor x = 32, full width = 776 matches hitbox width exactly)
+- Drawn in the 2× world-scale context, so world coordinates are used directly
+
+**Implementation:**
+- `BUILDING_IMG` — single `Image` object preloaded alongside billboard images (after BILLBOARD_CROP)
+- `BUILDING_PARAPET` — `{sx:0, sy:0, sw:287, sh:39}` source crop constants
+- `drawWorld()` platform loop: `pi === 0` special case draws the parapet via 9-argument `drawImage`; falls through to brick fallback while image loads
+- `pi >= 3` billboard case is unchanged; walls (`pi === 1, 2`) fall through to the original brick/glow/pattern rendering
+
+**Test:** Start the game and verify the floor shows the building parapet art (rooftop with AC units) instead of the brick fill. Walls should still show bricks. Collision should be unchanged.

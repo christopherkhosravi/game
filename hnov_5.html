@@ -874,6 +874,12 @@ const BILLBOARD_CROP = [
   {sx:165, sy:224, sw:694, sh:602}, // billboard_5
 ];
 
+// Building rooftop image — parapet strip drawn over the floor platform (staticPlats[0])
+// Source: 287×984 RGBA PNG; parapet = top ~4% of height (39px), full width
+const BUILDING_IMG = new Image();
+BUILDING_IMG.src = 'animations/building_prepped.png';
+const BUILDING_PARAPET = {sx:0, sy:0, sw:287, sh:39};
+
 function updateBgVideo() {
   if (bgDir === 1) {
     bgFrameIndex++;
@@ -982,6 +988,25 @@ function drawWorld() {
   // — static platforms —
   for (let pi = 0; pi < staticPlats.length; pi++) {
     const p = staticPlats[pi];
+    if (pi === 0) {
+      // floor — draw building parapet strip centred on hitbox
+      if (BUILDING_IMG.complete && BUILDING_IMG.naturalWidth > 0) {
+        const c = BUILDING_PARAPET;
+        const drawH = p.w * c.sh / c.sw;
+        const drawY = p.y + (p.h - drawH) / 2;
+        ctx.drawImage(BUILDING_IMG, c.sx, c.sy, c.sw, c.sh, p.x, drawY, p.w, drawH);
+      } else {
+        r(p.x, p.y+3, p.w, p.h-3, P.plat1);
+        r(p.x, p.y, p.w, 3, P.platTop);
+        ctx.fillStyle = P.platGlow;
+        ctx.fillRect(p.x+1, p.y+1, p.w-2, 1);
+        for (let bx = p.x; bx < p.x+p.w; bx+=16) {
+          ctx.fillStyle = P.plat2;
+          ctx.fillRect(bx, p.y+4, 1, p.h-6);
+        }
+      }
+      continue;
+    }
     if (pi >= 3) {
       // floating platforms — draw billboard PNG scaled to platform dimensions
       const img = BILLBOARD_IMGS[BILLBOARD_PLAT_MAP[pi - 3]];
