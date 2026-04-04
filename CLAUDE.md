@@ -359,12 +359,12 @@ p.prevWallContact = p.wallContact;
 
 **Asset:** `animations/building_prepped.png` — 287×984 RGBA PNG of a pixel-art building. The parapet (rooftop edge with AC units) occupies the very top of the image.
 
-**Source crop:** `sx=0, sy=0, sw=287, sh=39` — rows 0–38 of the source image (top ~4%). `sy=0` ensures nothing is cropped from the top; antenna and AC units at rows 17–34 are fully included.
+**Source crop:** `sx=0, sy=0, sw=287, sh=137` — rows 0–136 of the source image. `sy=0` ensures nothing is cropped from the top; `sh=137` extends the visible content ~2.5× the original sh (39) further below the previous bottom edge (row 39), showing the parapet cap plus a significant portion of the upper building face below the roofline.
 
 **Flat-top row:** Source row 35 is the first row ≥90% opaque across full width (measured via Pillow) — this is the solid parapet cap and defines the roofline.
 
 **Draw formula:**
-- `drawH = p.w * c.sh / c.sw` = 776 × 39 / 287 ≈ 105.4 world units (proportional height)
+- `drawH = p.w * c.sh / c.sw` = 776 × 137 / 287 ≈ 370 world units (proportional height)
 - `drawY = p.y - c.flatTopRow * (p.w / c.sw)` = 1440 − 35 × 2.704 ≈ 1345.4 world units
   - Source row 35 (flat top) maps to world y = p.y = 1440 → roofline aligns with hitbox top edge ✓
   - Source rows 0–34 (antenna, AC units) render above p.y → fully visible above the floor ✓

@@ -875,11 +875,11 @@ const BILLBOARD_CROP = [
 ];
 
 // Building rooftop image — parapet strip drawn over the floor platform (staticPlats[0])
-// Source: 287×984 RGBA PNG; parapet = top ~4% of height (39px), full width
+// Source: 287×984 RGBA PNG; sh=137 covers rows 0–136 (parapet + upper building face)
 const BUILDING_IMG = new Image();
 BUILDING_IMG.src = 'animations/building_prepped.png';
 // flatTopRow: source row where the solid parapet cap begins (measured via Pillow; first row ≥90% opaque)
-const BUILDING_PARAPET = {sx:0, sy:0, sw:287, sh:39, flatTopRow:35};
+const BUILDING_PARAPET = {sx:0, sy:0, sw:287, sh:137, flatTopRow:35};
 
 function updateBgVideo() {
   if (bgDir === 1) {
