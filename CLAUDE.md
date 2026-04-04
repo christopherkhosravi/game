@@ -443,6 +443,20 @@ p.prevWallContact = p.wallContact;
 
 **Test:** Floor shows building parapet centred on canvas with equal gaps (210 world units) on each side to the walls. Roofline sits at floor hitbox top edge. Walls show bricks.
 
+## Wall Building Image
+
+**What it does:** `animations/building_prepped.png` is drawn on both the left and right walls (staticPlats indices 1–2). The image is scaled to the full wall height (h=1420) with width proportional. Right wall draws normally; left wall draws mirrored horizontally via negative `drawW` in the 9-argument `drawImage` call.
+
+**Implementation (drawWorld() platform loop, before the brick fallback):**
+- `pi === 1 || pi === 2` branch added before `pi >= 3` billboard branch
+- Scale: `drawH = p.h`, `drawW = iw * (drawH / ih)` (aspect-preserving, height-fit)
+- Right (pi=2): `ctx.drawImage(img, 0,0,iw,ih, p.x, p.y, drawW, drawH)`
+- Left (pi=1): `ctx.drawImage(img, 0,0,iw,ih, p.x+drawW, p.y, -drawW, drawH)`
+- Falls back to brick pattern if image not yet loaded
+- Reuses the already-preloaded `BUILDING_IMG` object (no new Image() needed)
+
+**Position notes:** Position is tunable — adjust `p.x` offset for left/right placement relative to the wall hitbox. Position was not finalized at implementation time.
+
 ## Dash: 3 Uses Per Air Cycle
 
 **What changed:** `dashAvail` (bool) replaced with `dashCount` (int 0–3). The player can dash up to 3 times before landing; each dash decrements the counter. Landing resets it to 3. HUD updated from 1 pip (`pip0`) to 3 pips (`pip0–pip2`). Charging state (pink) shows while grounded and count < 3.

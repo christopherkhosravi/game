@@ -1036,6 +1036,23 @@ function drawWorld() {
       }
       continue;
     }
+    if (pi === 1 || pi === 2) {
+      // walls — draw building_prepped.png scaled to full wall height
+      if (BUILDING_IMG.complete && BUILDING_IMG.naturalWidth > 0) {
+        const iw = BUILDING_IMG.naturalWidth;
+        const ih = BUILDING_IMG.naturalHeight;
+        const drawH = p.h;
+        const drawW = iw * (drawH / ih);
+        if (pi === 2) {
+          // right wall — normal orientation
+          ctx.drawImage(BUILDING_IMG, 0, 0, iw, ih, p.x, p.y, drawW, drawH);
+        } else {
+          // left wall — mirrored horizontally
+          ctx.drawImage(BUILDING_IMG, 0, 0, iw, ih, p.x + drawW, p.y, -drawW, drawH);
+        }
+        continue;
+      }
+    }
     if (pi >= 3) {
       // floating platforms — draw billboard PNG scaled to platform dimensions
       const img = BILLBOARD_IMGS[BILLBOARD_PLAT_MAP[pi - 3]];
