@@ -192,7 +192,7 @@ const rotBarriers = [
 // patrol enemies {x,y,w,h, ox, range, speed, dir}
 // one stationary enemy on platform 2 (y:165), sitting on top: enemy.y+h=165
 const enemies = [
-  {x:580, y:752, w:18, h:18, ox:580, range:0, speed:0, dir:0},
+  {x:564, y:752, w:51, h:18, ox:564, range:0, speed:0, dir:0},
 ];
 
 // goal
@@ -1137,10 +1137,7 @@ function drawWorld() {
   for (const e of enemies) {
     if (SPIKES_IMG.complete && SPIKES_IMG.naturalWidth > 0) {
       const c = SPIKES_CROP;
-      const drawH = e.h;
-      const drawW = drawH * c.sw / c.sh;
-      const drawX = e.x + (e.w - drawW) / 2;
-      ctx.drawImage(SPIKES_IMG, c.sx, c.sy, c.sw, c.sh, drawX, e.y, drawW, drawH);
+      ctx.drawImage(SPIKES_IMG, c.sx, c.sy, c.sw, c.sh, e.x, e.y, e.w, e.h);
     } else {
       r(e.x, e.y, e.w, e.h, P.enemy);
       r(e.x, e.y, e.w, 3, P.enemyFg);
