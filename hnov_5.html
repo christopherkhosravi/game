@@ -1626,6 +1626,40 @@ function drawCutscene() {
     ctx.fillRect(0, 0, CW, CH);
     ctx.restore();
   }
+
+  if (cutsceneFadeState === 'none' && !cutsceneExiting) {
+    const _subtitleText = cutsceneClip === 2
+      ? 'Give me my tea back!'
+      : cutsceneMidFired
+        ? 'OH SHIT!'
+        : 'Fuck yeah, I love me my Chai tea.';
+    drawCutsceneSubtitle(_subtitleText);
+  }
+}
+
+function drawCutsceneSubtitle(text) {
+  const fontSize = 30;
+  ctx.save();
+  ctx.font = `${fontSize}px "Courier New", monospace`;
+  const textW = ctx.measureText(text).width;
+  const padX = 52, padY = 26;
+  const boxW = textW + padX * 2;
+  const boxH = fontSize + padY * 2;
+  const boxX = (CW - boxW) / 2;
+  const boxY = CH - boxH - 60;
+  ctx.strokeStyle = '#3a2a6e';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(boxX - 8, boxY - 8, boxW + 16, boxH + 16);
+  ctx.fillStyle = '#0d0d1e';
+  ctx.fillRect(boxX, boxY, boxW, boxH);
+  ctx.strokeStyle = '#6a5acd';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(boxX, boxY, boxW, boxH);
+  ctx.fillStyle = '#9a8acd';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, CW / 2, boxY + boxH / 2);
+  ctx.restore();
 }
 
 // ─── RENDER ──────────────────────────────────────────────────────────────────

@@ -342,7 +342,7 @@ With these changes `animFrame` 0 → `bounce/2.png`, `animFrame` 1 → `bounce/3
 
 ## Cutscene System
 
-**What it does:** A cutscene plays between the title screen (BEGIN button) and the countdown. Clip 1 plays in full; clip 2 plays only its last 2 seconds. Fades are event-driven, not time-calculated.
+**What it does:** A cutscene plays between the title screen (BEGIN button) and the countdown. Clip 1 plays in full; clip 2 plays only its last ~3.8 seconds (2 s visible after fade-in). Fades are event-driven, not time-calculated. Each segment displays a subtitle box at the bottom of the canvas.
 
 **Fade schedule:**
 1. Midpoint of clip 1 (`timeupdate` fires when `currentTime >= duration/2`) → fade out + back in (1800 ms each way), clip 1 continues playing
@@ -381,6 +381,11 @@ With these changes `animFrame` 0 → `bounce/2.png`, `animFrame` 1 → `bounce/3
 **Collision prevention:** Videos are paused when a fade begins. The `ended` event cannot fire during a fade because the video is paused. The fade-in completion handler resumes the video, at which point `ended` can naturally fire. This eliminates the race condition where `ended` would overwrite an in-progress fade.
 
 **Architecture note:** `gameState = 'cutscene'` causes `update()` to return early (existing guard `gameState !== 'playing'`), so no game logic runs during the cutscene.
+
+**Subtitles:** `drawCutsceneSubtitle(text)` draws a canvas box matching the title screen overlay style: `background:#0d0d1e`, inner border `2px solid #6a5acd`, outer border `1px solid #3a2a6e` offset 8px, text `#9a8acd` `30px "Courier New"`. Box is centred horizontally, 60px from canvas bottom. Called from `drawCutscene()` only when `cutsceneFadeState === 'none' && !cutsceneExiting`. Text per segment:
+- Clip 1 first half (`!cutsceneMidFired`): "Fuck yeah, I love me my Chai tea."
+- Clip 1 second half (`cutsceneMidFired`, `cutsceneClip === 1`): "OH SHIT!"
+- Clip 2 (`cutsceneClip === 2`): "Give me my tea back!"
 
 ## Wall Slide Entry Cost
 
