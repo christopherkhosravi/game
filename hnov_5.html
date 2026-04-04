@@ -158,7 +158,7 @@ const GROUND_Y = 1440;
 // static platforms {x,y,w,h,type:'solid'|'pass'}
 // Vertical level: full-width rooftop floor + tall building walls with gap + interior platforms
 const staticPlats = [
-  {x:32,     y:GROUND_Y, w:LW-64, h:40,  type:'solid'}, // floor — inset from walls (16-unit gap each side)
+  {x:32,     y:GROUND_Y, w:388,   h:20,  type:'solid'}, // floor — half-size: w=388 (was LW-64=776), h=20 (was 40); left edge kept at 32 so player spawn (x=40) lands on it
   {x:0,      y:LH-1420,  w:16,   h:1420, type:'solid'}, // left wall  — base at level bottom, rises upward
   {x:LW-16,  y:LH-1420,  w:16,   h:1420, type:'solid'}, // right wall — same; gap is horizontal beside floor
   {x:80,     y:1000,     w:120, h:16,   type:'pass'}, // platform 1 (lower)
@@ -997,6 +997,9 @@ function drawWorld() {
         // Anchor flat-top row to p.y so the roofline aligns with the hitbox top edge;
         // content above that row (AC units, antenna) extends upward above the floor.
         const drawY = p.y - c.flatTopRow * (p.w / c.sw);
+        // Fill black behind the image so semi-transparent edge pixels blend with black, not the light background
+        ctx.fillStyle = '#000';
+        ctx.fillRect(p.x, drawY, p.w, drawH);
         ctx.drawImage(BUILDING_IMG, c.sx, c.sy, c.sw, c.sh, p.x, drawY, p.w, drawH);
       } else {
         r(p.x, p.y+3, p.w, p.h-3, P.plat1);

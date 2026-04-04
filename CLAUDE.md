@@ -355,27 +355,29 @@ p.prevWallContact = p.wallContact;
 
 ## Floor Visual — Building Parapet Strip
 
-**What it does:** The floor platform (staticPlats[0]) is drawn as a cropped strip of the building rooftop image instead of the default brick fill. Walls (staticPlats[1–2]) are unaffected. Collision box is unchanged.
+**What it does:** The floor platform (staticPlats[0]) is drawn as a cropped strip of the building rooftop image instead of the default brick fill. Walls (staticPlats[1–2]) are unaffected.
+
+**Floor hitbox (current):** `{x:32, y:GROUND_Y=1440, w:388, h:20, type:'solid'}` — half the original size (was w=LW-64=776, h=40). Left edge kept at x=32 so player spawn (x=40) remains on the floor; centering at LW/2 would put the floor at x=226, unreachable from spawn. Right gap increases from 16 to 404 world units. Vertical position unchanged (y=GROUND_Y=1440) so the roofline stays at canvas y=865 in the spawn camera frame (cam.y≈1007.5).
 
 **Asset:** `animations/building_prepped.png` — 287×984 RGBA PNG of a pixel-art building. The parapet (rooftop edge with AC units) occupies the very top of the image.
 
-**Source crop:** `sx=0, sy=0, sw=287, sh=137` — rows 0–136 of the source image. `sy=0` ensures nothing is cropped from the top; `sh=137` extends the visible content ~2.5× the original sh (39) further below the previous bottom edge (row 39), showing the parapet cap plus a significant portion of the upper building face below the roofline.
+**Source crop:** `sx=0, sy=0, sw=287, sh=137` — rows 0–136 of the source image. `sy=0` ensures nothing is cropped from the top; `sh=137` shows the parapet cap plus a significant portion of the upper building face.
 
 **Flat-top row:** Source row 35 is the first row ≥90% opaque across full width (measured via Pillow) — this is the solid parapet cap and defines the roofline.
 
-**Draw formula:**
-- `drawH = p.w * c.sh / c.sw` = 776 × 137 / 287 ≈ 370 world units (proportional height)
-- `drawY = p.y - c.flatTopRow * (p.w / c.sw)` = 1440 − 35 × 2.704 ≈ 1345.4 world units
+**Draw formula** (all values update automatically when hitbox dimensions change):
+- `drawH = p.w * c.sh / c.sw` = 388 × 137 / 287 ≈ 185 world units (proportional height)
+- `drawY = p.y - c.flatTopRow * (p.w / c.sw)` = 1440 − 35 × (388/287) ≈ 1392.7 world units
   - Source row 35 (flat top) maps to world y = p.y = 1440 → roofline aligns with hitbox top edge ✓
   - Source rows 0–34 (antenna, AC units) render above p.y → fully visible above the floor ✓
-  - Source rows 35–38 (parapet face) render slightly below p.y → hidden underground ✓
-- `dx = p.x` (floor x = 32, full width = 776 matches hitbox width exactly)
+- `dx = p.x = 32` (image left edge matches hitbox left edge)
+- A black `fillRect` is drawn at `(p.x, drawY, p.w, drawH)` before `drawImage` so semi-transparent PNG edge pixels blend with black instead of the light city background, eliminating the white/grey outline artifact
 - Drawn in the 2× world-scale context, so world coordinates are used directly
 
 **Implementation:**
 - `BUILDING_IMG` — single `Image` object preloaded alongside billboard images (after BILLBOARD_CROP)
-- `BUILDING_PARAPET` — `{sx:0, sy:0, sw:287, sh:39, flatTopRow:35}` source crop + anchor constants
-- `drawWorld()` platform loop: `pi === 0` special case draws the parapet via 9-argument `drawImage`; falls through to brick fallback while image loads
+- `BUILDING_PARAPET` — `{sx:0, sy:0, sw:287, sh:137, flatTopRow:35}` source crop + anchor constants
+- `drawWorld()` platform loop: `pi === 0` special case fills black then draws the parapet via 9-argument `drawImage`; falls through to brick fallback while image loads
 - `pi >= 3` billboard case is unchanged; walls (`pi === 1, 2`) fall through to the original brick/glow/pattern rendering
 
-**Test:** Start the game and verify the floor shows the building parapet art with AC units and antenna visible above the floor line, the roofline flat cap sitting at floor level, and walls still showing bricks. Collision unchanged.
+**Test:** Floor shows building parapet with AC units above the roofline, no white/grey outline, hitbox is half the original size (w=388, h=20), player still spawns and lands correctly, walls show bricks.
