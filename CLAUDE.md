@@ -296,28 +296,46 @@ The entire fix is changing `type:'solid'` → `type:'pass'` on the 6 floating pl
 
 **What it does:** The 6 floating platforms (staticPlats indices 3–8) are drawn as scaled billboard PNG images instead of the default brick/color fill. Collision boxes are unchanged — only the visual rendering differs. The floor (index 0) and walls (indices 1–2) keep their original appearance.
 
-**Assets:** `animations/billboard_1.png` through `billboard_5.png` — 1024×1024 RGBA PNGs with transparent backgrounds and neon pixel-art billboard designs.
+**Assets:** `animations/billboard_1.png` through `billboard_5.png` — 1024×1024 RGBA PNGs with transparent backgrounds and neon pixel-art billboard designs. `animations/long_billboard.png` — 832×1248 RGBA PNG, portrait chai-tea billboard with hanging mechanism (white bg removed via Pillow flood-fill).
 
 **Assignment (BILLBOARD_PLAT_MAP):**
 | Floating slot | staticPlats index | Billboard |
 |---|---|---|
 | 0 | 3 (platform 1, left, y=1000) | billboard_1 |
 | 1 | 4 (platform 2, right, y=770) | billboard_2 |
-| 2 | 5 (platform 3, left, y=570) | billboard_3 |
+| 2 | 5 (platform 3, left, y=570) | long_billboard |
 | 3 | 6 (platform 4, right, y=390) | billboard_4 |
 | 4 | 7 (platform 5, left, y=220) | billboard_5 |
 | 5 | 8 (platform 6 top, y=80) | billboard_3 |
 
-Pattern 1,2,3,4,5,3 — no two adjacent platforms share the same image. Platform 6 (top) reuses billboard_3 because it is not adjacent to platform 3 in the climbing path.
+Pattern 1,2,long,4,5,3 — no two adjacent platforms share the same image.
 
 **Implementation:**
-- `BILLBOARD_IMGS` — array of 5 `Image` objects preloaded at startup (after background frame loader)
-- `BILLBOARD_PLAT_MAP` — `[0,1,2,3,4,2]` maps floating-platform slot to `BILLBOARD_IMGS` index
+- `BILLBOARD_IMGS` — array of 6 `Image` objects (indices 0–5); billboard_1–5 loaded via loop, long_billboard pushed as index 5
+- `BILLBOARD_PLAT_MAP` — `[0,1,5,3,4,2]` maps floating-platform slot to `BILLBOARD_IMGS` index
 - `drawWorld()` platform loop converted from `for…of` to indexed `for` loop; `pi >= 3` branches to billboard drawing (drawn in 2× world-scale context, so world coords are used directly)
 - Drawing uses the 9-argument `drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh)` to crop transparent padding from the source before scaling.
-- `BILLBOARD_CROP` stores the visible content bounding box for each image (measured via Pillow): all 5 images share `sx=165, sw=694`; `sy` is 225 (images 1,3,4) or 224 (images 2,5); `sh` is 601 or 602. Left/right padding is 165px each, top ~225px, bottom ~198px, out of a 1024×1024 canvas.
+- `BILLBOARD_CROP` stores the visible content bounding box for each image (measured via Pillow): billboard_1–5 share `sx=165, sw=694`; long_billboard is `sx=137, sy=81, sw=559, sh=1079`.
 - Draw formula: `drawH = p.w * c.sh / c.sw` — visible content width fills the platform exactly, height scales proportionally. Overflow below platform bottom is intentional (not clipped).
 - Fallback: if image not yet loaded, draws the original brick fill
+
+## Long Billboard — Platform 3 (staticPlats[5], y=570)
+
+**What it does:** Platform slot 2 (staticPlats index 5, y=570) displays `long_billboard.png` — a portrait-oriented chai-tea billboard with a hanging mechanism. The billboard frame fills the hitbox; the mechanism hangs below with no collision.
+
+**Asset:** `animations/long_billboard.png` — 832×1248 RGBA PNG. Source was `Downloads/long billboard.jpg`. White background removed via Pillow: exterior white (flood-filled from all 4 image edges, label 1, 507,968 px) and all interior white regions with `y_min >= 880` (hanging mechanism trapped pixels) set to alpha=0. White pixels inside the chai-tea photo content (above y=880) are preserved.
+
+**Visible content bounding box (Pillow `getbbox`):** `sx=137, sy=81, sw=559, sh=1079` (full frame + mechanism). Frame ends at approximately y=955 in the source (where content width narrows from 559 to ~330 as the billboard corners taper into the mechanism).
+
+**Platform hitbox (staticPlats[5]):** `{x:90, y:570, w:90, h:141, type:'pass'}`
+- `w=90` — narrower than adjacent platforms to suit portrait proportions
+- `h=141` — matches the billboard frame visual height at this scale: `round(90 * 874 / 559) = 141` (frame height in source = 955−81 = 874px)
+- `type:'pass'` — unchanged; player lands on top, passes through from below/sides
+
+**Draw at runtime:**
+- `drawH = 90 * 1079/559 ≈ 174` world units total
+- Frame occupies world y=570 to y=711 (141px) — aligns with hitbox
+- Mechanism occupies world y=711 to y=744 (33px) — visible below hitbox, no collision
 
 ## God Mode Cheat
 

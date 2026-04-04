@@ -170,7 +170,7 @@ const staticPlats = [
   {x:LW-16,  y:LH-1420,  w:16,   h:1420, type:'solid'}, // right wall — same; gap is horizontal beside floor
   {x:80,     y:1000,     w:120, h:16,   type:'pass'}, // platform 1 (lower)
   {x:560,    y:770,      w:120, h:16,   type:'pass'}, // platform 2 (upper)
-  {x:90,     y:570,      w:130, h:16,   type:'pass'}, // platform 3 — left, wall-jump reach from plat 2
+  {x:90,     y:570,      w:90,  h:141,  type:'pass'}, // platform 3 — left, wall-jump reach from plat 2
   {x:560,    y:390,      w:130, h:16,   type:'pass'}, // platform 4 — right, wall-jump + bounce reach
   {x:90,     y:220,      w:130, h:16,   type:'pass'}, // platform 5 — left, wall-jump reach from plat 4
   {x:300,    y:80,       w:220, h:16,   type:'pass'}, // platform 6 — top, wide landing pad for goal
@@ -886,18 +886,22 @@ const BILLBOARD_IMGS = [];
     img.src = `animations/billboard_${i}.png`;
     BILLBOARD_IMGS.push(img);
   }
+  const lb = new Image();
+  lb.src = 'animations/long_billboard.png';
+  BILLBOARD_IMGS.push(lb); // index 5
 })();
-// Map floating-platform slot (0–5) to BILLBOARD_IMGS index (0–4)
-// Pattern 1,2,3,4,5,3 — no two adjacent platforms share the same image
-const BILLBOARD_PLAT_MAP = [0, 1, 2, 3, 4, 2];
+// Map floating-platform slot (0–5) to BILLBOARD_IMGS index (0–5)
+// Pattern 1,2,long,4,5,3 — no two adjacent platforms share the same image
+const BILLBOARD_PLAT_MAP = [0, 1, 5, 3, 4, 2];
 // Visible content bounding box per billboard (px, measured from transparent edges via Pillow)
-// { sx, sy, sw, sh } = source crop rect; all images are 1024×1024
+// { sx, sy, sw, sh } = source crop rect
 const BILLBOARD_CROP = [
-  {sx:165, sy:225, sw:694, sh:601}, // billboard_1
-  {sx:165, sy:224, sw:694, sh:602}, // billboard_2
-  {sx:165, sy:225, sw:694, sh:601}, // billboard_3
-  {sx:165, sy:225, sw:694, sh:601}, // billboard_4
-  {sx:165, sy:224, sw:694, sh:602}, // billboard_5
+  {sx:165, sy:225, sw:694, sh:601}, // billboard_1   (1024×1024)
+  {sx:165, sy:224, sw:694, sh:602}, // billboard_2   (1024×1024)
+  {sx:165, sy:225, sw:694, sh:601}, // billboard_3   (1024×1024)
+  {sx:165, sy:225, sw:694, sh:601}, // billboard_4   (1024×1024)
+  {sx:165, sy:224, sw:694, sh:602}, // billboard_5   (1024×1024)
+  {sx:137, sy:81,  sw:559, sh:1079}, // long_billboard (832×1248; frame+mechanism; frame ends ~y=955)
 ];
 
 // Building rooftop image — parapet strip drawn over the floor platform (staticPlats[0])
