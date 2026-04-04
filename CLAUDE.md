@@ -345,11 +345,11 @@ With these changes `animFrame` 0 → `bounce/2.png`, `animFrame` 1 → `bounce/3
 **What it does:** A cutscene plays between the title screen (BEGIN button) and the countdown. Clip 1 plays in full; clip 2 plays only its last 2 seconds. Fades are event-driven, not time-calculated.
 
 **Fade schedule:**
-1. Midpoint of clip 1 (`timeupdate` fires when `currentTime >= duration/2`) → fade out + back in (600 ms each way), clip 1 continues playing
-2. End of clip 1 (`ended`) → fade out (600 ms), then at full black: seek clip 2 to `duration - 2`, play it, fade back in (600 ms)
-3. End of clip 2 (`ended`) → exit fade to black (1000 ms) → `startGame()`
+1. Midpoint of clip 1 (`timeupdate` fires when `currentTime >= duration/2`) → fade out + back in (1800 ms each way), clip 1 continues playing
+2. End of clip 1 (`ended`) → fade out (1800 ms), then at full black: seek clip 2 to `duration - 2`, play it, fade back in (1800 ms)
+3. End of clip 2 (`ended`) → exit fade to black (3000 ms) → `startGame()`
 
-**Skip:** Space or R → immediately begins exit fade (1000 ms) → countdown. During exit fade the last video frame fades to black before `startGame()` is called.
+**Skip:** Space or R → immediately begins exit fade (3000 ms) → countdown. During exit fade the last video frame fades to black before `startGame()` is called.
 
 **Key variables (GAME STATE section):**
 - `cutsceneClip` — `1` | `2`, which video element is active
@@ -360,7 +360,7 @@ With these changes `animFrame` 0 → `bounce/2.png`, `animFrame` 1 → `bounce/3
 - `cutsceneFadeAction` — `'switchToClip2'` | `'none'`, action to execute at peak black
 - `cutsceneMidFired` — bool, prevents the midpoint fade from firing more than once
 
-**Constants:** `CUTSCENE_FADE_MS = 600` (each half of a mid-cutscene fade), `CUTSCENE_EXIT_MS = 1000` (exit fade duration).
+**Constants:** `CUTSCENE_FADE_MS = 1800` (each half of a mid-cutscene fade), `CUTSCENE_EXIT_MS = 3000` (exit fade duration).
 
 **`drawCutscene()` logic:**
 - If `cutsceneExiting`: renders last video frame with black overlay ramping from 0→1 over `CUTSCENE_EXIT_MS`, then calls `startGame()` at alpha=1 (canvas is fully black, no flash)
