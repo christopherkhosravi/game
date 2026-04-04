@@ -359,6 +359,7 @@ With these changes `animFrame` 0 → `bounce/2.png`, `animFrame` 1 → `bounce/3
 - `cutsceneFadeStart` — `performance.now()` when the current fade phase began
 - `cutsceneFadeAction` — `'switchToClip2'` | `'none'`, action to execute at peak black
 - `cutsceneMidFired` — bool, prevents the midpoint fade from firing more than once
+- `cutsceneVidPaused` — bool, true when a video has been paused for a fade and needs to resume on fade-in completion
 
 **Constants:** `CUTSCENE_FADE_MS = 1800` (each half of a mid-cutscene fade), `CUTSCENE_EXIT_MS = 3000` (exit fade duration).
 
@@ -370,11 +371,14 @@ With these changes `animFrame` 0 → `bounce/2.png`, `animFrame` 1 → `bounce/3
 - Two hidden `<video>` elements (`cutsceneVid1`, `cutsceneVid2`) with `preload="auto" muted playsinline` in the HTML.
 - `beginCutscene()` — hides overlay, sets `gameState = 'cutscene'`, resets all fade state, plays vid1 from `currentTime = 0`.
 - `drawCutscene()` — called from `render()` early-return when `gameState === 'cutscene'`.
-- `vid1 'timeupdate'` listener → fires midpoint fade when `currentTime >= duration/2` (guarded by `cutsceneMidFired`).
-- `vid1 'ended'` listener → starts fade-out with `cutsceneFadeAction = 'switchToClip2'`; clip 2 seek+play happens at peak black.
+- `vid1 'timeupdate'` listener → at `currentTime >= duration/2`: pauses v1, sets `cutsceneVidPaused = true`, starts fade-out. Guarded by `cutsceneMidFired` so it fires once only.
+- `vid1 'ended'` listener → starts fade-out with `cutsceneFadeAction = 'switchToClip2'`; clip 2 seek+play happens at peak black. Clip 2 is seeked to `duration - 2 - (CUTSCENE_FADE_MS/1000)` so it arrives at full opacity with exactly 2 s of content remaining.
+- Fade-in completion in `drawCutscene` → if `cutsceneVidPaused`, resumes the active video and clears the flag.
 - `vid2 'ended'` listener → sets `cutsceneExiting = true`.
 - Skip keydown (Space or R) → sets `cutsceneExiting = true`, pauses both videos, clears `cutsceneFadeState`.
 - Button click handler calls `beginCutscene` (not `startGame`).
+
+**Collision prevention:** Videos are paused when a fade begins. The `ended` event cannot fire during a fade because the video is paused. The fade-in completion handler resumes the video, at which point `ended` can naturally fire. This eliminates the race condition where `ended` would overwrite an in-progress fade.
 
 **Architecture note:** `gameState = 'cutscene'` causes `update()` to return early (existing guard `gameState !== 'playing'`), so no game logic runs during the cutscene.
 

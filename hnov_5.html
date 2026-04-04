@@ -386,6 +386,7 @@ let cutsceneFadeState = 'none'; // 'none' | 'out' | 'in'
 let cutsceneFadeStart = 0;
 let cutsceneFadeAction = 'none'; // 'switchToClip2' | 'none'
 let cutsceneMidFired = false;
+let cutsceneVidPaused = false;
 
 // spawn countdown & run timer
 let countdown = -1;      // 3,2,1 = digit; 0 = "GO!"; -1 = inactive
@@ -1550,6 +1551,7 @@ function beginCutscene() {
   cutsceneFadeStart = 0;
   cutsceneFadeAction = 'none';
   cutsceneMidFired = false;
+  cutsceneVidPaused = false;
   const v1 = document.getElementById('cutsceneVid1');
   v1.currentTime = 0;
   v1.play().catch(() => {});
@@ -1586,8 +1588,10 @@ function drawCutscene() {
     if (fadeAlpha >= 1) {
       if (cutsceneFadeAction === 'switchToClip2') {
         cutsceneClip = 2;
+        cutsceneVidPaused = false;
         const v2 = document.getElementById('cutsceneVid2');
-        const doSeek = () => { v2.currentTime = Math.max(0, v2.duration - 2); v2.play().catch(() => {}); };
+        const seekOffset = 2 + CUTSCENE_FADE_MS / 1000;
+        const doSeek = () => { v2.currentTime = Math.max(0, v2.duration - seekOffset); v2.play().catch(() => {}); };
         if (v2.readyState >= 1) doSeek(); else v2.addEventListener('loadedmetadata', doSeek, {once: true});
         cutsceneFadeAction = 'none';
       }
@@ -1600,6 +1604,11 @@ function drawCutscene() {
     if (fadeAlpha <= 0) {
       cutsceneFadeState = 'none';
       fadeAlpha = 0;
+      if (cutsceneVidPaused) {
+        const _rv = document.getElementById(cutsceneClip === 1 ? 'cutsceneVid1' : 'cutsceneVid2');
+        _rv.play().catch(() => {});
+        cutsceneVidPaused = false;
+      }
     }
   }
 
@@ -1724,6 +1733,8 @@ document.getElementById('cutsceneVid1').addEventListener('timeupdate', () => {
   if (v1.duration && v1.currentTime >= v1.duration / 2) {
     cutsceneMidFired = true;
     if (cutsceneFadeState === 'none') {
+      v1.pause();
+      cutsceneVidPaused = true;
       cutsceneFadeState = 'out';
       cutsceneFadeStart = performance.now();
     }
