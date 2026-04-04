@@ -88,6 +88,12 @@ body{
     <div id="abilityBar">
       <span style="font-size:10px;letter-spacing:1px;margin-right:2px;">DASH</span>
       <div class="abilityPip" id="pip0"></div>
+      <div class="abilityPip" id="pip1"></div>
+      <div class="abilityPip" id="pip2"></div>
+      <span style="font-size:10px;letter-spacing:1px;margin-left:8px;margin-right:2px;">GRAB</span>
+      <div class="abilityPip" id="wpip0"></div>
+      <div class="abilityPip" id="wpip1"></div>
+      <div class="abilityPip" id="wpip2"></div>
     </div>
   </div>
   <canvas id="gameCanvas" width="1680" height="945"></canvas>
@@ -235,8 +241,9 @@ function makePlayer() {
     wallContact:false,
     prevWallContact:false,
     wallMeter:100,
+    wallCharges:3,
     // abilities
-    dashAvail:true,
+    dashCount:3,
     dashTimer:0,
     dashDir:1,
     dashGrace:0,
@@ -495,6 +502,7 @@ function update() {
   const left   = press(['KeyA']);
   const right  = press(['KeyD']);
   const down   = press(['KeyS']);
+  const downP  = jp(['KeyS']);
   const jumpP  = jp(['Space','KeyW']);
   const jumpH  = press(['Space','KeyW']);
   const jumpR  = jr(['Space','KeyW']);
@@ -505,10 +513,10 @@ function update() {
   if (restP) { respawn(); return; }
 
   // — dash — Q=left, E=right
-  if ((dashQP || dashEP) && p.dashAvail && p.dashTimer === 0) {
+  if ((dashQP || dashEP) && p.dashCount > 0 && p.dashTimer === 0) {
     p.dashDir    = dashQP ? -1 : 1;
     p.facingRight = dashQP ? false : true;
-    p.dashAvail  = false;
+    p.dashCount--;
     p.dashTimer  = DASH_FRAMES;
     p.dashGrace  = DASH_FRAMES + DASH_GRACE;
     p.floating   = false;
@@ -538,13 +546,16 @@ function update() {
 
   // — float —
   if (!p.onGround && p.dashTimer <= 0) {
-    if (down && p.floatMeter > 0) {
-      p.floating = true;
-    } else {
-      p.floating = false;
+    if (downP) {
+      if (p.floating) {
+        p.floating = false;
+      } else if (p.floatMeter > 0) {
+        p.floating = true;
+      }
     }
     if (p.floating) {
       p.floatMeter = Math.max(0, p.floatMeter - 1/3);
+      if (p.floatMeter === 0) p.floating = false;
     }
   } else {
     p.floating = false;
@@ -576,9 +587,9 @@ function update() {
   // — wall meter —
   if (p.wallContact) {
     if (!p.prevWallContact) {
-      // fresh wall contact: deduct 30% entry cost
-      p.wallMeter = Math.max(0, p.wallMeter - 30);
-      if (p.wallMeter === 0) { p.wallContact = false; p.wallDir = 0; }
+      // fresh wall contact: consume one charge
+      if (p.wallCharges === 0) { p.wallContact = false; p.wallDir = 0; }
+      else { p.wallCharges--; }
     }
     if (p.wallContact) {
       p.wallMeter = Math.max(0, p.wallMeter - 1/3);
@@ -665,8 +676,9 @@ function update() {
 
   if (ry.landed) {
     p.onGround = true;
-    p.dashAvail = true;
-    p.floating  = false;
+    p.dashCount   = 3;
+    p.wallCharges = 3;
+    p.floating    = false;
     p.bouncing  = false;
     p.jumpCut   = false;
     p.jumpHeld  = false;
@@ -756,7 +768,12 @@ function update() {
 
   const stateLabel = p.bouncing ? 'BOUNCE' : p.state.toUpperCase();
   document.getElementById('hudState').textContent = stateLabel;
-  document.getElementById('pip0').className = 'abilityPip' + (p.dashAvail ? '' : (p.onGround ? ' charging' : ' used'));
+  for (let i = 0; i < 3; i++) {
+    document.getElementById('pip' + i).className = 'abilityPip' + (i < p.dashCount ? '' : (p.onGround ? ' charging' : ' used'));
+  }
+  for (let i = 0; i < 3; i++) {
+    document.getElementById('wpip' + i).className = 'abilityPip' + (i < p.wallCharges ? '' : ' used');
+  }
   document.getElementById('floatFill').style.width = p.floatMeter + '%';
   document.getElementById('wallFill').style.width = p.wallMeter + '%';
 

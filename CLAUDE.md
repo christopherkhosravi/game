@@ -384,21 +384,25 @@ With these changes `animFrame` 0 → `bounce/2.png`, `animFrame` 1 → `bounce/3
 
 **Subtitles:** `drawCutsceneSubtitle(text)` draws a canvas box matching the title screen overlay style: `background:#0d0d1e`, inner border `2px solid #6a5acd`, outer border `1px solid #3a2a6e` offset 8px, text `#9a8acd` `30px "Courier New"`. Box is centred horizontally, 60px from canvas bottom.
 
-## Wall Slide Entry Cost
+## Wall Grab Charge System
 
-**What it does:** On fresh wall contact (player was not touching the wall the previous frame), 30 points are instantly deducted from `wallMeter`. If the meter drops to 0, `wallContact` and `wallDir` are cleared immediately so the player falls instead of sliding. This cost applies to wall slide only — dead hang (`floatMeter`) is unaffected.
+**What it does:** The player gets 3 wall grab charges per air cycle, shown as dots in the HUD (top-right, labelled GRAB). Each fresh wall contact consumes 1 charge. If 0 charges remain, touching a wall does nothing — the player slides past with no grab. Charges refresh on landing. The continuous `wallMeter` drain while actively grabbing is unchanged (no entry cost).
 
-**Key variable:** `prevWallContact` (bool) added to `makePlayer()`. Tracks whether the player was wall-sliding last frame. Initialized to `false`; reset automatically on `respawn()` via `makePlayer()`.
+**Key variables:**
+- `wallCharges` (int 0–3) — added to `makePlayer()`. Decremented on fresh wall contact; reset to 3 on `ry.landed`. Reset automatically on `respawn()`/`startGame()` via `makePlayer()`.
+- `prevWallContact` (bool) — retained to detect fresh vs. held contact.
 
-**Implementation (wall meter block, ~line 549):**
+**HUD:** Three `abilityPip` dots (`wpip0–wpip2`) labelled GRAB in `#abilityBar`. Lit = charge available, dark = spent.
+
+**Implementation (wall meter block):**
 ```
 if (p.wallContact) {
   if (!p.prevWallContact) {
-    p.wallMeter = Math.max(0, p.wallMeter - 30);
-    if (p.wallMeter === 0) { p.wallContact = false; p.wallDir = 0; }
+    if (p.wallCharges === 0) { p.wallContact = false; p.wallDir = 0; }
+    else { p.wallCharges--; }
   }
   if (p.wallContact) {
-    p.wallMeter = Math.max(0, p.wallMeter - 1);
+    p.wallMeter = Math.max(0, p.wallMeter - 1/3);
     if (p.wallMeter === 0) { p.wallContact = false; p.wallDir = 0; }
   }
 } else if (p.onGround) {
@@ -407,7 +411,7 @@ if (p.wallContact) {
 p.prevWallContact = p.wallContact;
 ```
 
-**Test:** Grab a wall with a full meter and verify the meter jumps down 30% immediately. Then let it drain to ~25%, leave the wall, touch it again — player should fall instantly (meter clamped to 0, no slide).
+**Test:** Use 3 wall grabs in the air; 4th touch should not grab. Land and verify all 3 dots refill.
 
 ## Floor Visual — Building Parapet Strip
 
@@ -438,6 +442,22 @@ p.prevWallContact = p.wallContact;
 - `pi >= 3` billboard case is unchanged; walls (`pi === 1, 2`) fall through to the original brick/glow/pattern rendering
 
 **Test:** Floor shows building parapet centred on canvas with equal gaps (210 world units) on each side to the walls. Roofline sits at floor hitbox top edge. Walls show bricks.
+
+## Dash: 3 Uses Per Air Cycle
+
+**What changed:** `dashAvail` (bool) replaced with `dashCount` (int 0–3). The player can dash up to 3 times before landing; each dash decrements the counter. Landing resets it to 3. HUD updated from 1 pip (`pip0`) to 3 pips (`pip0–pip2`). Charging state (pink) shows while grounded and count < 3.
+
+**Key variable:** `dashCount` in `makePlayer()`. All former `dashAvail` references updated.
+
+**Test:** Dash 3 times in the air — 4th attempt should do nothing. Land and verify all 3 dots refill.
+
+## Float: Toggle Instead of Hold
+
+**What changed:** Float is now triggered by pressing S once (toggle on), pressing S again toggles it off. Previously required holding S. The `floatMeter` still drains at 1/3 per frame while floating; hitting 0 auto-disables float. Landing also disables float.
+
+**Implementation:** `downP = jp(['KeyS'])` added to inputs block. Float block now checks `downP` to toggle `p.floating` rather than checking `down` (held).
+
+**Test:** Press S in the air — float should activate and stay on without holding. Press S again to cancel. Let meter drain to 0 and verify float stops automatically.
 
 ## Meter Duration and Wall Fall Speed Tuning
 
