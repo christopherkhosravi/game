@@ -330,6 +330,7 @@ Pattern 1,2,3,4,5,3 — no two adjacent platforms share the same image. Platform
 - **Sequence detection:** Second `keydown` listener checks each key against `_godSeq[_godIdx]`. On full match, toggles `godMode` and resets index. On mismatch, resets (or advances to 1 if the key matches the first step, to handle partial overlaps).
 - **Flight block:** Inserted in `update()` immediately after the countdown early-return. If `godMode`: clears `p.dead`, moves player with `ArrowLeft/Right/Up/Down` at 5 px/frame, zeroes `vx/vy`, advances particles, decrements screen shake, calls `updateCamera()`, then returns — skipping all physics, collision, hazard, and win checks.
 - **Indicator:** In `render()` after `drawSpawnTimer()`: draws `'GOD MODE'` in `#ff6b9d` bold Courier New 18px, right-aligned at `(CW-16, 16)`.
+- **Position dot & coords:** Also in the god mode block in `render()`: a red (`#ff0000`) filled circle (radius 5) is drawn at the player's canvas-space centre — `dotX = (player.x + 6 - cam.x) * 2`, `dotY = (player.y + 8 - cam.y) * 2`. World coordinates `(Math.round(player.x), Math.round(player.y))` are drawn in 14px Courier New to the right of the dot (`dotX + 9`, `dotY`), updating in real time.
 
 ## Bounce Animation First-Frame Skip
 

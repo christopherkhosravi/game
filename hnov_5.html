@@ -1708,6 +1708,17 @@ function render() {
     ctx.textBaseline = 'top';
     ctx.fillText('GOD MODE', CW - 16, 16);
     ctx.textAlign = 'left';
+    const dotX = (player.x + 6 - cam.x) * 2;
+    const dotY = (player.y + 8 - cam.y) * 2;
+    ctx.beginPath();
+    ctx.arc(dotX, dotY, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#ff0000';
+    ctx.fill();
+    ctx.font = '14px "Courier New"';
+    ctx.fillStyle = '#ff0000';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`(${Math.round(player.x)}, ${Math.round(player.y)})`, dotX + 9, dotY);
+    ctx.textBaseline = 'top';
   }
   if (lbTitleShow) drawTitleLeaderboard();
 }
