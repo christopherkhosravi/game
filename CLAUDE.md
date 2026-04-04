@@ -28,7 +28,7 @@ game/
 │   ├── countdown_1.png           (countdown sprite, step 1)
 │   ├── countdown_go.png          (countdown sprite, GO!)
 │   └── transparent/
-│       ├── bounce/      1–4.png    (only 1–3 used in SPRITE_DEFS)
+│       ├── bounce/      1–4.png    (only 2–3 used in SPRITE_DEFS; frame 1 skipped via firstFrame:2)
 │       ├── dash/        1–3.png    (only 1–2 used in SPRITE_DEFS)
 │       ├── dead hang/   1.png
 │       ├── dying/       1–4.png
@@ -65,7 +65,7 @@ Single `<script>` block, organized in sections marked with `// ───` header
 These systems are tuned and intentional. Do not modify them unless the user specifically asks:
 
 - **Physics constants** (lines ~190–211): gravity, jump force, dash speed, bounce, friction, coyote/buffer frames
-- **SPRITE_DEFS frame counts**: bounce=3, dash=2, etc. — extra frames on disk are intentional unused spares
+- **SPRITE_DEFS frame counts**: bounce=2 (starts from file 2.png via `firstFrame:2`), dash=2, etc. — extra frames on disk are intentional unused spares
 - **Player hitbox** (w:12, h:16) and sprite anchor math in `drawHnov()`
 - **Platform layout** (`staticPlats` array) and goal position
 - **Camera system** — lerp factor, clamping logic, 2x scale relationship
@@ -329,6 +329,16 @@ Pattern 1,2,3,4,5,3 — no two adjacent platforms share the same image. Platform
 - **Sequence detection:** Second `keydown` listener checks each key against `_godSeq[_godIdx]`. On full match, toggles `godMode` and resets index. On mismatch, resets (or advances to 1 if the key matches the first step, to handle partial overlaps).
 - **Flight block:** Inserted in `update()` immediately after the countdown early-return. If `godMode`: clears `p.dead`, moves player with `ArrowLeft/Right/Up/Down` at 5 px/frame, zeroes `vx/vy`, advances particles, decrements screen shake, calls `updateCamera()`, then returns — skipping all physics, collision, hazard, and win checks.
 - **Indicator:** In `render()` after `drawSpawnTimer()`: draws `'GOD MODE'` in `#ff6b9d` bold Courier New 18px, right-aligned at `(CW-16, 16)`.
+
+## Bounce Animation First-Frame Skip
+
+**What it does:** The bounce animation starts on `bounce/2.png` (previously the second frame) instead of `bounce/1.png`. `bounce/1.png` is never shown.
+
+**How:** Two changes in `hnov_5.html`:
+1. **SPRITE_DEFS** — bounce entry changed from `frames: 3, loopStart: 1` to `frames: 2, firstFrame: 2`. `firstFrame` tells the loader which file number to start from; `frames` says how many to load. Result: `SPRITE_IMGS['bounce']` = [2.png, 3.png].
+2. **Loader** — added `firstFrame` support: `const _f0 = def.firstFrame ?? 1; for (let i = _f0; i < _f0 + def.frames; i++)`. All other animations have no `firstFrame` so they default to 1 and are unaffected.
+
+With these changes `animFrame` 0 → `bounce/2.png`, `animFrame` 1 → `bounce/3.png`, and the loop restarts at 0, so `bounce/1.png` is never loaded or displayed.
 
 ## Cutscene System
 
