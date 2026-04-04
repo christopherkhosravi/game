@@ -962,24 +962,6 @@ function drawHnov(wx, wy, facingRight, state, animFrame) {
   const _sw = SPRITE_W * _scale, _sh = SPRITE_H * _scale;
   ctx.drawImage(_img, feetX - _sw / 2, feetY - _sh + yOffset, _sw, _sh);
 
-  // Bounce impact ring
-  if (state === 'bounce') {
-    ctx.strokeStyle = '#e01828';
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.8;
-    ctx.beginPath();
-    ctx.arc(feetX, feetY, SPRITE_W * 0.4, 0, Math.PI * 2);
-    ctx.stroke();
-    const _starPts = [[-1,-2],[1,-2.5],[-1.5,-1],[1.5,-1.2]];
-    ctx.fillStyle = '#ffe840';
-    for (const [ox, oy] of _starPts) {
-      const px = feetX + ox * SPRITE_W * 0.3;
-      const py = feetY + oy * SPRITE_W * 0.3;
-      ctx.fillRect(px - 2, py - 1, 4, 2);
-      ctx.fillRect(px - 1, py - 2, 2, 4);
-    }
-    ctx.globalAlpha = 1;
-  }
 
   ctx.restore();
 }
