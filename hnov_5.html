@@ -1047,8 +1047,8 @@ function drawWorld() {
           // right wall — normal orientation
           ctx.drawImage(BUILDING_IMG, 0, 0, iw, ih, p.x, p.y, drawW, drawH);
         } else {
-          // left wall — mirrored horizontally
-          ctx.drawImage(BUILDING_IMG, 0, 0, iw, ih, p.x + drawW, p.y, -drawW, drawH);
+          // left wall — mirrored horizontally, right edge aligned to hitbox right edge
+          ctx.drawImage(BUILDING_IMG, 0, 0, iw, ih, p.x + p.w, p.y, -drawW, drawH);
         }
         continue;
       }
