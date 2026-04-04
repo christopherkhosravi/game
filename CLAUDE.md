@@ -359,18 +359,23 @@ p.prevWallContact = p.wallContact;
 
 **Asset:** `animations/building_prepped.png` — 287×984 RGBA PNG of a pixel-art building. The parapet (rooftop edge with AC units) occupies the very top of the image.
 
-**Source crop:** `sx=0, sy=0, sw=287, sh=39` — top ~4% of image height (39px), full width.
+**Source crop:** `sx=0, sy=0, sw=287, sh=39` — rows 0–38 of the source image (top ~4%). `sy=0` ensures nothing is cropped from the top; antenna and AC units at rows 17–34 are fully included.
+
+**Flat-top row:** Source row 35 is the first row ≥90% opaque across full width (measured via Pillow) — this is the solid parapet cap and defines the roofline.
 
 **Draw formula:**
 - `drawH = p.w * c.sh / c.sw` = 776 × 39 / 287 ≈ 105.4 world units (proportional height)
-- `drawY = p.y + (p.h - drawH) / 2` — centred on the 40-unit-tall hitbox, overflowing ~33 units above and below
+- `drawY = p.y - c.flatTopRow * (p.w / c.sw)` = 1440 − 35 × 2.704 ≈ 1345.4 world units
+  - Source row 35 (flat top) maps to world y = p.y = 1440 → roofline aligns with hitbox top edge ✓
+  - Source rows 0–34 (antenna, AC units) render above p.y → fully visible above the floor ✓
+  - Source rows 35–38 (parapet face) render slightly below p.y → hidden underground ✓
 - `dx = p.x` (floor x = 32, full width = 776 matches hitbox width exactly)
 - Drawn in the 2× world-scale context, so world coordinates are used directly
 
 **Implementation:**
 - `BUILDING_IMG` — single `Image` object preloaded alongside billboard images (after BILLBOARD_CROP)
-- `BUILDING_PARAPET` — `{sx:0, sy:0, sw:287, sh:39}` source crop constants
+- `BUILDING_PARAPET` — `{sx:0, sy:0, sw:287, sh:39, flatTopRow:35}` source crop + anchor constants
 - `drawWorld()` platform loop: `pi === 0` special case draws the parapet via 9-argument `drawImage`; falls through to brick fallback while image loads
 - `pi >= 3` billboard case is unchanged; walls (`pi === 1, 2`) fall through to the original brick/glow/pattern rendering
 
-**Test:** Start the game and verify the floor shows the building parapet art (rooftop with AC units) instead of the brick fill. Walls should still show bricks. Collision should be unchanged.
+**Test:** Start the game and verify the floor shows the building parapet art with AC units and antenna visible above the floor line, the roofline flat cap sitting at floor level, and walls still showing bricks. Collision unchanged.

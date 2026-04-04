@@ -878,7 +878,8 @@ const BILLBOARD_CROP = [
 // Source: 287×984 RGBA PNG; parapet = top ~4% of height (39px), full width
 const BUILDING_IMG = new Image();
 BUILDING_IMG.src = 'animations/building_prepped.png';
-const BUILDING_PARAPET = {sx:0, sy:0, sw:287, sh:39};
+// flatTopRow: source row where the solid parapet cap begins (measured via Pillow; first row ≥90% opaque)
+const BUILDING_PARAPET = {sx:0, sy:0, sw:287, sh:39, flatTopRow:35};
 
 function updateBgVideo() {
   if (bgDir === 1) {
@@ -993,7 +994,9 @@ function drawWorld() {
       if (BUILDING_IMG.complete && BUILDING_IMG.naturalWidth > 0) {
         const c = BUILDING_PARAPET;
         const drawH = p.w * c.sh / c.sw;
-        const drawY = p.y + (p.h - drawH) / 2;
+        // Anchor flat-top row to p.y so the roofline aligns with the hitbox top edge;
+        // content above that row (AC units, antenna) extends upward above the floor.
+        const drawY = p.y - c.flatTopRow * (p.w / c.sw);
         ctx.drawImage(BUILDING_IMG, c.sx, c.sy, c.sw, c.sh, p.x, drawY, p.w, drawH);
       } else {
         r(p.x, p.y+3, p.w, p.h-3, P.plat1);
