@@ -91,6 +91,8 @@ body{
     </div>
   </div>
   <canvas id="gameCanvas" width="1680" height="945"></canvas>
+  <video id="cutsceneVid1" src="animations/cutscene_1.mp4" preload="auto" muted playsinline style="display:none"></video>
+  <video id="cutsceneVid2" src="animations/cutscene_2.mp4" preload="auto" muted playsinline style="display:none"></video>
   <div id="overlay">
     <div id="overlayInner">
       <div id="overlayTitle">HNOV</div>
@@ -375,6 +377,12 @@ let deadOverlayTimer = 0;
 let deathPhase = 'dying'; // 'dying' | 'fallen'
 let screenShake = 0;
 let godMode = false;
+
+// cutscene
+let cutsceneClip = 0;
+let cutsceneStartTime = 0;
+let cutsceneExiting = false;
+let cutsceneExitStart = 0;
 
 // spawn countdown & run timer
 let countdown = -1;      // 3,2,1 = digit; 0 = "GO!"; -1 = inactive
@@ -1524,9 +1532,63 @@ function drawSpawnTimer() {
   ctx.restore();
 }
 
+// ─── CUTSCENE ────────────────────────────────────────────────────────────────
+function beginCutscene() {
+  document.getElementById('overlay').classList.add('hidden');
+  gameState = 'cutscene';
+  cutsceneStartTime = performance.now();
+  cutsceneClip = 1;
+  cutsceneExiting = false;
+  cutsceneExitStart = 0;
+  const v1 = document.getElementById('cutsceneVid1');
+  v1.currentTime = 0;
+  v1.play().catch(() => {});
+}
+
+function drawCutscene() {
+  const now = performance.now();
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, CW, CH);
+
+  const vid = cutsceneClip === 1
+    ? document.getElementById('cutsceneVid1')
+    : document.getElementById('cutsceneVid2');
+
+  if (vid.readyState >= 2 && vid.videoWidth > 0) {
+    const scale = Math.max(CW / vid.videoWidth, CH / vid.videoHeight);
+    const dw = vid.videoWidth * scale, dh = vid.videoHeight * scale;
+    ctx.drawImage(vid, (CW - dw) / 2, (CH - dh) / 2, dw, dh);
+  }
+
+  let fadeAlpha = 0;
+  if (cutsceneExiting) {
+    fadeAlpha = Math.min(1, (now - cutsceneExitStart) / 500);
+    if (fadeAlpha >= 1) {
+      startGame();
+      return;
+    }
+  } else {
+    const cyclePos = (now - cutsceneStartTime) % 2000;
+    if (cyclePos >= 1700) {
+      fadeAlpha = (cyclePos - 1700) / 300;
+    } else if (cyclePos < 300) {
+      fadeAlpha = 1 - cyclePos / 300;
+    }
+  }
+
+  if (fadeAlpha > 0) {
+    ctx.save();
+    ctx.globalAlpha = fadeAlpha;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, CW, CH);
+    ctx.restore();
+  }
+}
+
 // ─── RENDER ──────────────────────────────────────────────────────────────────
 function render() {
   ctx.clearRect(0,0,CW,CH);
+  if (gameState === 'cutscene') { drawCutscene(); return; }
   if (gameState === 'dead') ctx.filter = 'blur(6px)';
   drawBackground();
   if (gameState === 'playing' || gameState === 'win' || gameState === 'dead') drawWorld();
@@ -1602,6 +1664,12 @@ document.addEventListener('keydown', e => {
     document.getElementById('overlay').classList.remove('hidden');
     return;
   }
+  if ((e.code === 'Space' || e.code === 'KeyR') && gameState === 'cutscene' && !cutsceneExiting) {
+    cutsceneExiting = true;
+    cutsceneExitStart = performance.now();
+    document.getElementById('cutsceneVid1').pause();
+    document.getElementById('cutsceneVid2').pause();
+  }
   if (e.code === 'KeyR' && (gameState === 'playing' || gameState === 'win') && !player.dead) {
     startGame();
   }
@@ -1613,7 +1681,28 @@ document.addEventListener('keydown', e => {
     gameState = 'playing';
   }
 });
-document.getElementById('overlayBtn').addEventListener('click', startGame);
+document.getElementById('overlayBtn').addEventListener('click', beginCutscene);
+
+document.getElementById('cutsceneVid1').addEventListener('ended', () => {
+  if (gameState !== 'cutscene' || cutsceneExiting) return;
+  cutsceneClip = 2;
+  const v2 = document.getElementById('cutsceneVid2');
+  function playV2() {
+    v2.currentTime = Math.max(0, v2.duration - 2);
+    v2.play().catch(() => {});
+  }
+  if (v2.readyState >= 1) {
+    playV2();
+  } else {
+    v2.addEventListener('loadedmetadata', playV2, {once: true});
+  }
+});
+
+document.getElementById('cutsceneVid2').addEventListener('ended', () => {
+  if (gameState !== 'cutscene' || cutsceneExiting) return;
+  cutsceneExiting = true;
+  cutsceneExitStart = performance.now();
+});
 document.getElementById('scoresBtn').addEventListener('click', () => {
   document.getElementById('overlay').classList.add('hidden');
   lbTitleShow = true;

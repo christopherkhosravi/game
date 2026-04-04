@@ -21,6 +21,8 @@ game/
 │   │   └── frames/
 │   │       └── frame_001–161.jpg   (animated background sequence)
 │   ├── building_prepped.png      (building sprite, 287×984 RGBA — parapet strip used for floor)
+│   ├── cutscene_1.mp4            (cutscene clip 1 — plays in full)
+│   ├── cutscene_2.mp4            (cutscene clip 2 — plays last 2 seconds only)
 │   ├── countdown_3.png           (countdown sprite, step 3)
 │   ├── countdown_2.png           (countdown sprite, step 2)
 │   ├── countdown_1.png           (countdown sprite, step 1)
@@ -327,6 +329,35 @@ Pattern 1,2,3,4,5,3 — no two adjacent platforms share the same image. Platform
 - **Sequence detection:** Second `keydown` listener checks each key against `_godSeq[_godIdx]`. On full match, toggles `godMode` and resets index. On mismatch, resets (or advances to 1 if the key matches the first step, to handle partial overlaps).
 - **Flight block:** Inserted in `update()` immediately after the countdown early-return. If `godMode`: clears `p.dead`, moves player with `ArrowLeft/Right/Up/Down` at 5 px/frame, zeroes `vx/vy`, advances particles, decrements screen shake, calls `updateCamera()`, then returns — skipping all physics, collision, hazard, and win checks.
 - **Indicator:** In `render()` after `drawSpawnTimer()`: draws `'GOD MODE'` in `#ff6b9d` bold Courier New 18px, right-aligned at `(CW-16, 16)`.
+
+## Cutscene System
+
+**What it does:** A cutscene plays between the title screen (BEGIN button) and the countdown. Clip 1 plays in full; clip 2 plays only its last 2 seconds. The two clips play back to back. Every 2 seconds throughout the cutscene, a brief fade-to-black-and-back flash occurs. The same fade-to-black transition plays when the cutscene ends naturally or is skipped, before moving into the countdown.
+
+**Assets:** `animations/cutscene_1.mp4` and `animations/cutscene_2.mp4`.
+
+**Skip:** Space or R at any point during the cutscene → immediate fade to black (500 ms) → countdown.
+
+**Key variables (GAME STATE section):**
+- `cutsceneClip` — `1` = clip 1 playing, `2` = clip 2 playing
+- `cutsceneStartTime` — `performance.now()` when cutscene began (used for 2-second fade cycle)
+- `cutsceneExiting` — true when the exit fade-to-black is underway
+- `cutsceneExitStart` — `performance.now()` when exit fade began
+
+**Periodic fade:** At each 2-second mark, a 300 ms fade-out followed by a 300 ms fade-in is applied. Uses `(performance.now() - cutsceneStartTime) % 2000` to compute cycle position. Fade-out window: `[1700, 2000)` ms; fade-in window: `[0, 300)` ms.
+
+**Exit fade:** 500 ms linear fade to black. When alpha reaches 1.0, `startGame()` is called directly from `drawCutscene()`.
+
+**Implementation:**
+- Two hidden `<video>` elements (`cutsceneVid1`, `cutsceneVid2`) with `preload="auto" muted playsinline` in the HTML.
+- `beginCutscene()` — hides overlay, sets `gameState = 'cutscene'`, plays vid1 from `currentTime = 0`.
+- `drawCutscene()` — draws black background, draws current video frame (cover-fit: `scale = Math.max(CW/vw, CH/vh)`), draws fade overlay. Called from `render()` early-return when `gameState === 'cutscene'`.
+- `vid1 'ended'` listener → sets `cutsceneClip = 2`, seeks vid2 to `duration - 2`, plays vid2.
+- `vid2 'ended'` listener → sets `cutsceneExiting = true`.
+- Skip keydown (Space or R) → sets `cutsceneExiting = true`, pauses both videos.
+- Button click handler changed from `startGame` to `beginCutscene`.
+
+**Architecture note:** `gameState = 'cutscene'` causes `update()` to return early (existing guard `gameState !== 'playing'`), so no game logic runs during the cutscene.
 
 ## Wall Slide Entry Cost
 
