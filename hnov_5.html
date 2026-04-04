@@ -1037,18 +1037,20 @@ function drawWorld() {
       continue;
     }
     if (pi === 1 || pi === 2) {
-      // walls — draw building_prepped.png scaled to full wall height
+      // walls — draw building_prepped.png scaled to full wall height + 5%
       if (BUILDING_IMG.complete && BUILDING_IMG.naturalWidth > 0) {
         const iw = BUILDING_IMG.naturalWidth;
         const ih = BUILDING_IMG.naturalHeight;
-        const drawH = p.h;
+        const drawH = p.h * 1.05;
         const drawW = iw * (drawH / ih);
+        // shift up so flatTopRow aligns with hitbox top (p.y)
+        const anchorY = p.y - BUILDING_PARAPET.flatTopRow * (drawH / ih);
         if (pi === 2) {
           // right wall — normal orientation
-          ctx.drawImage(BUILDING_IMG, 0, 0, iw, ih, p.x, p.y, drawW, drawH);
+          ctx.drawImage(BUILDING_IMG, 0, 0, iw, ih, p.x, anchorY, drawW, drawH);
         } else {
           // left wall — mirrored horizontally, right edge aligned to hitbox right edge
-          ctx.drawImage(BUILDING_IMG, 0, 0, iw, ih, p.x + p.w, p.y, -drawW, drawH);
+          ctx.drawImage(BUILDING_IMG, 0, 0, iw, ih, p.x + p.w, anchorY, -drawW, drawH);
         }
         continue;
       }
