@@ -438,3 +438,17 @@ p.prevWallContact = p.wallContact;
 - `pi >= 3` billboard case is unchanged; walls (`pi === 1, 2`) fall through to the original brick/glow/pattern rendering
 
 **Test:** Floor shows building parapet centred on canvas with equal gaps (210 world units) on each side to the walls. Roofline sits at floor hitbox top edge. Walls show bricks.
+
+## Meter Duration and Wall Fall Speed Tuning
+
+**What changed:**
+- Float meter drains at `1/3` per frame (was `1`) — 3× longer duration (300 frames from full instead of 100)
+- Wall grab meter drains at `1/3` per frame (was `1`) — 3× longer duration (300 frames from full instead of 100; 30-point entry cost unchanged)
+- `WALL_SLIDE_G` reduced from `0.07` to `0.035` — fall speed while wall-sliding is halved
+
+**Constants modified:**
+- `WALL_SLIDE_G` (line ~211, physics constants section) — `0.07` → `0.035`
+- Float drain (line ~547, update section) — `p.floatMeter - 1` → `p.floatMeter - 1/3`
+- Wall meter drain (line ~584, update section) — `p.wallMeter - 1` → `p.wallMeter - 1/3`
+
+**Test:** Hold S in the air and verify the float meter drains over ~5 seconds instead of ~1.7 s. Grab a wall and verify the meter drains over ~5 seconds. Wall-sliding should feel noticeably slower descent.
