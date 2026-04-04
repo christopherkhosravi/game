@@ -21,8 +21,9 @@ game/
 │   │   └── frames/
 │   │       └── frame_001–161.jpg   (animated background sequence)
 │   ├── building_prepped.png      (building sprite, 287×984 RGBA — parapet strip used for floor)
-│   ├── cutscene_1.mp4            (cutscene clip 1 — plays in full)
-│   ├── cutscene_2.mp4            (cutscene clip 2 — plays last 2 seconds only)
+│   ├── cutscene_1_real.mp4       (cutscene clip 1 — "Fuck yeah, I love me my Chai tea.")
+│   ├── cutscene_1.mp4            (cutscene clip 2 — "OH SHIT!")
+│   ├── cutscene_2.mp4            (cutscene clip 3 — "Give me my tea back!")
 │   ├── countdown_3.png           (countdown sprite, step 3)
 │   ├── countdown_2.png           (countdown sprite, step 2)
 │   ├── countdown_1.png           (countdown sprite, step 1)
@@ -342,50 +343,46 @@ With these changes `animFrame` 0 → `bounce/2.png`, `animFrame` 1 → `bounce/3
 
 ## Cutscene System
 
-**What it does:** A cutscene plays between the title screen (BEGIN button) and the countdown. Clip 1 plays in full; clip 2 plays only its last ~3.8 seconds (2 s visible after fade-in). Fades are event-driven, not time-calculated. Each segment displays a subtitle box at the bottom of the canvas.
+**What it does:** A cutscene plays between the title screen (BEGIN button) and the countdown. Three clips play in sequence, each in full with no seek offset. A fade out → fade in transition separates each clip. A final fade out leads into the countdown.
+
+**Clips (in order):**
+1. `cutsceneVid1` → `cutscene_1_real.mp4` — "Fuck yeah, I love me my Chai tea."
+2. `cutsceneVid2` → `cutscene_1.mp4` — "OH SHIT!"
+3. `cutsceneVid3` → `cutscene_2.mp4` — "Give me my tea back!"
 
 **Fade schedule:**
-1. Midpoint of clip 1 (`timeupdate` fires when `currentTime >= duration/2`) → fade out + back in (1800 ms each way), clip 1 continues playing
-2. End of clip 1 (`ended`) → fade out (1800 ms), then at full black: seek clip 2 to `duration - 2`, play it, fade back in (1800 ms)
-3. End of clip 2 (`ended`) → exit fade to black (3000 ms) → `startGame()`
+1. End of clip 1 (`ended`) → fade out (1800 ms) → clip 2 starts from `currentTime = 0` → fade in (1800 ms)
+2. End of clip 2 (`ended`) → fade out (1800 ms) → clip 3 starts from `currentTime = 0` → fade in (1800 ms)
+3. End of clip 3 (`ended`) → exit fade to black (3000 ms) → `startGame()`
 
-**Skip:** Space or R → immediately begins exit fade (3000 ms) → countdown. During exit fade the last video frame fades to black before `startGame()` is called.
+**Skip:** Space or R → immediately begins exit fade (3000 ms) → countdown.
 
 **Key variables (GAME STATE section):**
-- `cutsceneClip` — `1` | `2`, which video element is active
+- `cutsceneClip` — `1` | `2` | `3`, which video element is active
 - `cutsceneExiting` — true when the final exit fade is underway
 - `cutsceneExitStart` — `performance.now()` when exit fade began
-- `cutsceneFadeState` — `'none'` | `'out'` | `'in'`, tracks the mid-cutscene fade phase
+- `cutsceneFadeState` — `'none'` | `'out'` | `'in'`
 - `cutsceneFadeStart` — `performance.now()` when the current fade phase began
-- `cutsceneFadeAction` — `'switchToClip2'` | `'none'`, action to execute at peak black
-- `cutsceneMidFired` — bool, prevents the midpoint fade from firing more than once
-- `cutsceneVidPaused` — bool, true when a video has been paused for a fade and needs to resume on fade-in completion
 
-**Constants:** `CUTSCENE_FADE_MS = 1800` (each half of a mid-cutscene fade), `CUTSCENE_EXIT_MS = 3000` (exit fade duration).
+**Constants:** `CUTSCENE_FADE_MS = 1800` (each half of an inter-clip fade), `CUTSCENE_EXIT_MS = 3000` (final exit fade).
+**Helpers:** `CUTSCENE_VID_IDS = ['cutsceneVid1','cutsceneVid2','cutsceneVid3']`, `CUTSCENE_SUBTITLES` array, `_csVid(clip)` returns the element for clip 1/2/3.
 
 **`drawCutscene()` logic:**
-- If `cutsceneExiting`: renders last video frame with black overlay ramping from 0→1 over `CUTSCENE_EXIT_MS`, then calls `startGame()` at alpha=1 (canvas is fully black, no flash)
-- Otherwise: runs the fade state machine (`out` → peak black → execute action → `in` → `none`); draws current video frame then applies fade overlay on top
+- If `cutsceneExiting`: renders last video frame fading to black over `CUTSCENE_EXIT_MS`, calls `startGame()` at alpha=1.
+- Fade-out completion: increments `cutsceneClip`, seeks new video to 0, plays it, transitions to fade-in.
+- Fade-in completion: sets `cutsceneFadeState = 'none'` (subtitle appears).
+- Subtitle drawn only when `cutsceneFadeState === 'none' && !cutsceneExiting`.
 
 **Implementation:**
-- Two hidden `<video>` elements (`cutsceneVid1`, `cutsceneVid2`) with `preload="auto" muted playsinline` in the HTML.
-- `beginCutscene()` — hides overlay, sets `gameState = 'cutscene'`, resets all fade state, plays vid1 from `currentTime = 0`.
-- `drawCutscene()` — called from `render()` early-return when `gameState === 'cutscene'`.
-- `vid1 'timeupdate'` listener → at `currentTime >= duration/2`: pauses v1, sets `cutsceneVidPaused = true`, starts fade-out. Guarded by `cutsceneMidFired` so it fires once only.
-- `vid1 'ended'` listener → starts fade-out with `cutsceneFadeAction = 'switchToClip2'`; clip 2 seek+play happens at peak black. Clip 2 is seeked to `duration - 2 - (CUTSCENE_FADE_MS/1000)` so it arrives at full opacity with exactly 2 s of content remaining.
-- Fade-in completion in `drawCutscene` → if `cutsceneVidPaused`, resumes the active video and clears the flag.
-- `vid2 'ended'` listener → sets `cutsceneExiting = true`.
-- Skip keydown (Space or R) → sets `cutsceneExiting = true`, pauses both videos, clears `cutsceneFadeState`.
+- Three hidden `<video>` elements (`cutsceneVid1`–`3`) with `preload="auto" muted playsinline` in the HTML.
+- `vid1` and `vid2` share one `ended` listener (via `forEach`) → start fade-out, guarded by `cutsceneFadeState !== 'none'` to prevent collision.
+- `vid3 'ended'` listener → sets `cutsceneExiting = true`.
+- Skip keydown (Space or R) → pauses all three videos, clears fade state, sets `cutsceneExiting = true`.
 - Button click handler calls `beginCutscene` (not `startGame`).
-
-**Collision prevention:** Videos are paused when a fade begins. The `ended` event cannot fire during a fade because the video is paused. The fade-in completion handler resumes the video, at which point `ended` can naturally fire. This eliminates the race condition where `ended` would overwrite an in-progress fade.
 
 **Architecture note:** `gameState = 'cutscene'` causes `update()` to return early (existing guard `gameState !== 'playing'`), so no game logic runs during the cutscene.
 
-**Subtitles:** `drawCutsceneSubtitle(text)` draws a canvas box matching the title screen overlay style: `background:#0d0d1e`, inner border `2px solid #6a5acd`, outer border `1px solid #3a2a6e` offset 8px, text `#9a8acd` `30px "Courier New"`. Box is centred horizontally, 60px from canvas bottom. Called from `drawCutscene()` only when `cutsceneFadeState === 'none' && !cutsceneExiting`. Text per segment:
-- Clip 1 first half (`!cutsceneMidFired`): "Fuck yeah, I love me my Chai tea."
-- Clip 1 second half (`cutsceneMidFired`, `cutsceneClip === 1`): "OH SHIT!"
-- Clip 2 (`cutsceneClip === 2`): "Give me my tea back!"
+**Subtitles:** `drawCutsceneSubtitle(text)` draws a canvas box matching the title screen overlay style: `background:#0d0d1e`, inner border `2px solid #6a5acd`, outer border `1px solid #3a2a6e` offset 8px, text `#9a8acd` `30px "Courier New"`. Box is centred horizontally, 60px from canvas bottom.
 
 ## Wall Slide Entry Cost
 
