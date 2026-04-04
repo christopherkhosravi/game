@@ -361,7 +361,7 @@ p.prevWallContact = p.wallContact;
 
 **Player spawn (current):** `x: LW/2 - 6 = 414, y: GROUND_Y - 16 = 1424` — horizontally centred on the canvas (player w=12, so centre = x+6 = LW/2 = 420). Vertical unchanged.
 
-**Asset:** `animations/building_prepped.png` — 287×984 RGBA PNG of a pixel-art building. The parapet (rooftop edge with AC units) occupies the very top of the image.
+**Asset:** `animations/building_prepped.png` — 287×984 RGBA PNG of a pixel-art building. The parapet (rooftop edge with AC units) occupies the very top of the image. The image has been cleaned: 121 fully-opaque leading-edge pixels with luminance >120 were made transparent via a Pillow column-walk (for each column, walk from the first opaque pixel downward, zeroing alpha while luminance >120). These were light-grey/white pixels at the top boundary of each content structure causing a visible outline artifact. No semi-transparent pixels are present in this image — all pixels are alpha 0 or 255.
 
 **Source crop:** `sx=0, sy=0, sw=287, sh=137` — rows 0–136 of the source image. `sy=0` ensures nothing is cropped from the top; `sh=137` shows the parapet cap plus a significant portion of the upper building face.
 
