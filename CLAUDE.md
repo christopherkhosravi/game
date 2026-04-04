@@ -342,30 +342,39 @@ With these changes `animFrame` 0 → `bounce/2.png`, `animFrame` 1 → `bounce/3
 
 ## Cutscene System
 
-**What it does:** A cutscene plays between the title screen (BEGIN button) and the countdown. Clip 1 plays in full; clip 2 plays only its last 2 seconds. The two clips play back to back. Every 2 seconds throughout the cutscene, a brief fade-to-black-and-back flash occurs. The same fade-to-black transition plays when the cutscene ends naturally or is skipped, before moving into the countdown.
+**What it does:** A cutscene plays between the title screen (BEGIN button) and the countdown. Clip 1 plays in full; clip 2 plays only its last 2 seconds. Fades are event-driven, not time-calculated.
 
-**Assets:** `animations/cutscene_1.mp4` and `animations/cutscene_2.mp4`.
+**Fade schedule:**
+1. Midpoint of clip 1 (`timeupdate` fires when `currentTime >= duration/2`) → fade out + back in (600 ms each way), clip 1 continues playing
+2. End of clip 1 (`ended`) → fade out (600 ms), then at full black: seek clip 2 to `duration - 2`, play it, fade back in (600 ms)
+3. End of clip 2 (`ended`) → exit fade to black (1000 ms) → `startGame()`
 
-**Skip:** Space or R at any point during the cutscene → immediate fade to black (500 ms) → countdown.
+**Skip:** Space or R → immediately begins exit fade (1000 ms) → countdown. During exit fade the last video frame fades to black before `startGame()` is called.
 
 **Key variables (GAME STATE section):**
-- `cutsceneClip` — `1` = clip 1 playing, `2` = clip 2 playing
-- `cutsceneStartTime` — `performance.now()` when cutscene began (used for 2-second fade cycle)
-- `cutsceneExiting` — true when the exit fade-to-black is underway
+- `cutsceneClip` — `1` | `2`, which video element is active
+- `cutsceneExiting` — true when the final exit fade is underway
 - `cutsceneExitStart` — `performance.now()` when exit fade began
+- `cutsceneFadeState` — `'none'` | `'out'` | `'in'`, tracks the mid-cutscene fade phase
+- `cutsceneFadeStart` — `performance.now()` when the current fade phase began
+- `cutsceneFadeAction` — `'switchToClip2'` | `'none'`, action to execute at peak black
+- `cutsceneMidFired` — bool, prevents the midpoint fade from firing more than once
 
-**Periodic fade:** At each 2-second mark, a 300 ms fade-out followed by a 300 ms fade-in is applied. Uses `(performance.now() - cutsceneStartTime) % 2000` to compute cycle position. Fade-out window: `[1700, 2000)` ms; fade-in window: `[0, 300)` ms.
+**Constants:** `CUTSCENE_FADE_MS = 600` (each half of a mid-cutscene fade), `CUTSCENE_EXIT_MS = 1000` (exit fade duration).
 
-**Exit fade:** 500 ms linear fade to black. When alpha reaches 1.0, `startGame()` is called directly from `drawCutscene()`.
+**`drawCutscene()` logic:**
+- If `cutsceneExiting`: renders last video frame with black overlay ramping from 0→1 over `CUTSCENE_EXIT_MS`, then calls `startGame()` at alpha=1 (canvas is fully black, no flash)
+- Otherwise: runs the fade state machine (`out` → peak black → execute action → `in` → `none`); draws current video frame then applies fade overlay on top
 
 **Implementation:**
 - Two hidden `<video>` elements (`cutsceneVid1`, `cutsceneVid2`) with `preload="auto" muted playsinline` in the HTML.
-- `beginCutscene()` — hides overlay, sets `gameState = 'cutscene'`, plays vid1 from `currentTime = 0`.
-- `drawCutscene()` — draws black background, draws current video frame (cover-fit: `scale = Math.max(CW/vw, CH/vh)`), draws fade overlay. Called from `render()` early-return when `gameState === 'cutscene'`.
-- `vid1 'ended'` listener → sets `cutsceneClip = 2`, seeks vid2 to `duration - 2`, plays vid2.
+- `beginCutscene()` — hides overlay, sets `gameState = 'cutscene'`, resets all fade state, plays vid1 from `currentTime = 0`.
+- `drawCutscene()` — called from `render()` early-return when `gameState === 'cutscene'`.
+- `vid1 'timeupdate'` listener → fires midpoint fade when `currentTime >= duration/2` (guarded by `cutsceneMidFired`).
+- `vid1 'ended'` listener → starts fade-out with `cutsceneFadeAction = 'switchToClip2'`; clip 2 seek+play happens at peak black.
 - `vid2 'ended'` listener → sets `cutsceneExiting = true`.
-- Skip keydown (Space or R) → sets `cutsceneExiting = true`, pauses both videos.
-- Button click handler changed from `startGame` to `beginCutscene`.
+- Skip keydown (Space or R) → sets `cutsceneExiting = true`, pauses both videos, clears `cutsceneFadeState`.
+- Button click handler calls `beginCutscene` (not `startGame`).
 
 **Architecture note:** `gameState = 'cutscene'` causes `update()` to return early (existing guard `gameState !== 'playing'`), so no game logic runs during the cutscene.
 
