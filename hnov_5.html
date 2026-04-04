@@ -1616,7 +1616,7 @@ function drawCutscene() {
     ctx.restore();
   }
 
-  if (cutsceneFadeState === 'none' && !cutsceneExiting) {
+  if (cutsceneFadeState !== 'out' && !cutsceneExiting) {
     drawCutsceneSubtitle(CUTSCENE_SUBTITLES[cutsceneClip - 1]);
   }
 }
