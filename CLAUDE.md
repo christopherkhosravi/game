@@ -24,6 +24,7 @@ game/
 │   ├── cutscene_1_real.mp4       (cutscene clip 1 — "Fuck yeah, I love me my Chai tea.")
 │   ├── cutscene_1.mp4            (cutscene clip 2 — "OH SHIT!")
 │   ├── cutscene_2.mp4            (cutscene clip 3 — "Give me my tea back!")
+│   ├── spikes.png                (spike strip enemy sprite, 1024×1024 RGBA, white bg removed)
 │   ├── countdown_3.png           (countdown sprite, step 3)
 │   ├── countdown_2.png           (countdown sprite, step 2)
 │   ├── countdown_1.png           (countdown sprite, step 1)
@@ -487,3 +488,20 @@ p.prevWallContact = p.wallContact;
 - Wall meter drain (line ~584, update section) — `p.wallMeter - 1` → `p.wallMeter - 1/3`
 
 **Test:** Hold S in the air and verify the float meter drains over ~5 seconds instead of ~1.7 s. Grab a wall and verify the meter drains over ~5 seconds. Wall-sliding should feel noticeably slower descent.
+
+## Spike Strip Enemy Visual
+
+**What it does:** The stationary enemy (staticPlats hitbox 18×18, sitting on platform 2 at y=752) is drawn using `animations/spikes.png` instead of the previous filled rectangles and eye dots. The hitbox, kill behavior, and patrol range indicator are unchanged — only the visual rendering changed.
+
+**Asset:** `animations/spikes.png` — 1024×1024 RGBA PNG. Generated from `spikes.jpg` (Downloads) by removing the white background using Pillow corner-sampling with tolerance=30. Content bounding box measured via `getbbox()`: `(164, 400, 868, 649)` → 704×249 visible content.
+
+**Background removal:** `python3` one-liner using Pillow. Sampled corner pixels (all near RGB 255,255,255). Pixels within tolerance=30 of white set to alpha=0. Light purple shadow pixels (e.g. RGB 200,193,224) are outside the tolerance threshold and preserved. Result: 937,091 transparent pixels, 111,485 opaque.
+
+**Draw formula** (`drawWorld()`, enemies loop):
+- `drawH = e.h` (18 world units, matches hitbox height)
+- `drawW = drawH * sw/sh` = 18 × 704/249 ≈ 50.9 world units (aspect-preserving, wider than hitbox)
+- `drawX = e.x + (e.w - drawW) / 2` — centred horizontally on the hitbox
+- Source crop: `sx=164, sy=400, sw=704, sh=249` (content bounds only, no transparent padding)
+- Fallback: original filled rectangles drawn if image not yet loaded
+
+**Locked layers not touched:** Physics constants, hitbox dimensions, kill/collision logic, camera, controls.

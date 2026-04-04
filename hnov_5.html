@@ -907,6 +907,11 @@ BUILDING_IMG.src = 'animations/building_prepped.png';
 // flatTopRow: source row where the solid parapet cap begins (measured via Pillow; first row ≥90% opaque)
 const BUILDING_PARAPET = {sx:0, sy:0, sw:287, sh:137, flatTopRow:35};
 
+const SPIKES_IMG = new Image();
+SPIKES_IMG.src = 'animations/spikes.png';
+// Content bounding box measured via Pillow getbbox() on the transparent PNG
+const SPIKES_CROP = {sx:164, sy:400, sw:704, sh:249};
+
 function updateBgVideo() {
   if (bgDir === 1) {
     bgFrameIndex++;
@@ -1148,13 +1153,16 @@ function drawWorld() {
 
   // — enemies —
   for (const e of enemies) {
-    // body
-    r(e.x, e.y, e.w, e.h, P.enemy);
-    r(e.x, e.y, e.w, 3, P.enemyFg);
-    // eyes
-    ctx.fillStyle = P.enemyFg;
-    const eyeX = e.dir > 0 ? e.x+9 : e.x+2;
-    ctx.fillRect(eyeX, e.y+4, 3, 3);
+    if (SPIKES_IMG.complete && SPIKES_IMG.naturalWidth > 0) {
+      const c = SPIKES_CROP;
+      const drawH = e.h;
+      const drawW = drawH * c.sw / c.sh;
+      const drawX = e.x + (e.w - drawW) / 2;
+      ctx.drawImage(SPIKES_IMG, c.sx, c.sy, c.sw, c.sh, drawX, e.y, drawW, drawH);
+    } else {
+      r(e.x, e.y, e.w, e.h, P.enemy);
+      r(e.x, e.y, e.w, 3, P.enemyFg);
+    }
     // patrol range indicator
     ctx.fillStyle = 'rgba(205,74,205,0.15)';
     ctx.fillRect(e.ox, e.y+e.h, e.range, 2);
