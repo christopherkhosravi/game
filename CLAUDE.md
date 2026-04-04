@@ -357,7 +357,7 @@ p.prevWallContact = p.wallContact;
 
 **What it does:** The floor platform (staticPlats[0]) is drawn as a cropped strip of the building rooftop image instead of the default brick fill. Walls (staticPlats[1–2]) are unaffected.
 
-**Floor hitbox (current):** `{x:32, y:GROUND_Y=1440, w:388, h:20, type:'solid'}` — half the original size (was w=LW-64=776, h=40). Left edge kept at x=32 so player spawn (x=40) remains on the floor; centering at LW/2 would put the floor at x=226, unreachable from spawn. Right gap increases from 16 to 404 world units. Vertical position unchanged (y=GROUND_Y=1440) so the roofline stays at canvas y=865 in the spawn camera frame (cam.y≈1007.5).
+**Floor hitbox (current):** `{x:226, y:GROUND_Y=1440, w:388, h:20, type:'solid'}` — half the original size (was w=LW-64=776, h=40), horizontally centred: x=(LW-388)/2=226. Equal gaps of 210 world units on each side between floor and walls. Vertical position unchanged (y=GROUND_Y=1440).
 
 **Asset:** `animations/building_prepped.png` — 287×984 RGBA PNG of a pixel-art building. The parapet (rooftop edge with AC units) occupies the very top of the image.
 
@@ -370,14 +370,13 @@ p.prevWallContact = p.wallContact;
 - `drawY = p.y - c.flatTopRow * (p.w / c.sw)` = 1440 − 35 × (388/287) ≈ 1392.7 world units
   - Source row 35 (flat top) maps to world y = p.y = 1440 → roofline aligns with hitbox top edge ✓
   - Source rows 0–34 (antenna, AC units) render above p.y → fully visible above the floor ✓
-- `dx = p.x = 32` (image left edge matches hitbox left edge)
-- A black `fillRect` is drawn at `(p.x, drawY, p.w, drawH)` before `drawImage` so semi-transparent PNG edge pixels blend with black instead of the light city background, eliminating the white/grey outline artifact
+- `dx = p.x = 226` (image left edge matches hitbox left edge, centred on canvas)
 - Drawn in the 2× world-scale context, so world coordinates are used directly
 
 **Implementation:**
 - `BUILDING_IMG` — single `Image` object preloaded alongside billboard images (after BILLBOARD_CROP)
 - `BUILDING_PARAPET` — `{sx:0, sy:0, sw:287, sh:137, flatTopRow:35}` source crop + anchor constants
-- `drawWorld()` platform loop: `pi === 0` special case fills black then draws the parapet via 9-argument `drawImage`; falls through to brick fallback while image loads
+- `drawWorld()` platform loop: `pi === 0` special case draws the parapet via 9-argument `drawImage`; falls through to brick fallback while image loads
 - `pi >= 3` billboard case is unchanged; walls (`pi === 1, 2`) fall through to the original brick/glow/pattern rendering
 
-**Test:** Floor shows building parapet with AC units above the roofline, no white/grey outline, hitbox is half the original size (w=388, h=20), player still spawns and lands correctly, walls show bricks.
+**Test:** Floor shows building parapet centred on canvas with equal gaps (210 world units) on each side to the walls. Roofline sits at floor hitbox top edge. Walls show bricks.
