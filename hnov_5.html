@@ -1565,6 +1565,8 @@ function drawCutscene() {
   if (cutsceneExiting) {
     fadeAlpha = Math.min(1, (now - cutsceneExitStart) / 500);
     if (fadeAlpha >= 1) {
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, CW, CH);
       startGame();
       return;
     }
