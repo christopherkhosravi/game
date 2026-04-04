@@ -359,6 +359,8 @@ p.prevWallContact = p.wallContact;
 
 **Floor hitbox (current):** `{x:226, y:GROUND_Y=1440, w:388, h:20, type:'solid'}` — half the original size (was w=LW-64=776, h=40), horizontally centred: x=(LW-388)/2=226. Equal gaps of 210 world units on each side between floor and walls. Vertical position unchanged (y=GROUND_Y=1440).
 
+**Player spawn (current):** `x: LW/2 - 6 = 414, y: GROUND_Y - 16 = 1424` — horizontally centred on the canvas (player w=12, so centre = x+6 = LW/2 = 420). Vertical unchanged.
+
 **Asset:** `animations/building_prepped.png` — 287×984 RGBA PNG of a pixel-art building. The parapet (rooftop edge with AC units) occupies the very top of the image.
 
 **Source crop:** `sx=0, sy=0, sw=287, sh=137` — rows 0–136 of the source image. `sy=0` ensures nothing is cropped from the top; `sh=137` shows the parapet cap plus a significant portion of the upper building face.
