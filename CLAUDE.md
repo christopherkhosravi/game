@@ -552,3 +552,28 @@ ctx.drawImage(SPIKES_IMG, c.sx, c.sy, c.sw, c.sh, -e.h/2, -e.w/2, e.h, e.w);
 ctx.restore();
 ```
 Draw args `-e.h/2, -e.w/2, e.h, e.w` draw the original (wide) image centered, then rotation reorients it. For `rot=PI/2` the 51×18 source renders as 18×51 in world space with tips pointing right; for `rot=-PI/2` tips point left. Unrotated enemies (`e.rot` falsy) use the original draw path unchanged.
+
+## Removed Platforms
+
+### Platform 5 (staticPlats[7]) — removed session 3
+```
+{x:90, y:220, w:130, h:16, type:'pass'}
+```
+- Billboard slot: 4 (pi=7, pi−3=4), BILLBOARD_IMGS[4] = `billboard_5.png`
+- BILLBOARD_CROP[4]: `{sx:165, sy:224, sw:694, sh:602}`
+- To restore: re-insert as staticPlats[7] before the platform 6 entry, and change BILLBOARD_PLAT_MAP back to `[0,1,5,3,4,2]`
+
+## Level Layout Changes — Session 3
+
+### Platform 5 removed (staticPlats[7])
+`{x:90, y:220, w:130, h:16, type:'pass'}` removed. See "Removed Platforms" above for restore data.
+`BILLBOARD_PLAT_MAP` trimmed from `[0,1,5,3,4,2]` to `[0,1,5,3,2]` so platform 6 top (now slot 4) still maps to billboard_3 (index 2).
+
+### Platform 3 moved (x:90,y:570 → x:130,y:220)
+staticPlats[5] repositioned so left edge = x=130, top edge = y=220 (where platform 5 was). Dimensions and type unchanged (w:270, h:423, solid). Billboard visual rescales automatically.
+
+### Platform 3 top spikes realigned
+All 6 top spikes updated: y 552→202 (=220−18), x positions shifted right by 40px to start flush at new platform left edge x=130. New x positions: 130, 175, 220, 265, 310, 355 (6×45=270px, covering full platform width x=130 to x=400). The previous leftmost spike at x=90 was misaligned (40px left of new platform edge).
+
+### Right-wall spike trio at y=250 (rot=-Math.PI/2)
+Three spikes added side by side (vertically stacked, downward) at x=812, y=250/301/352. Each: `{w:18, h:51, rot:-Math.PI/2}`. Tips point left into level. Stacked flush with no gap (each h=51).

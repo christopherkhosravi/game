@@ -170,9 +170,9 @@ const staticPlats = [
   {x:LW-16,  y:LH-1420,  w:16,   h:1420, type:'solid'}, // right wall — same; gap is horizontal beside floor
   {x:80,     y:865,      w:120, h:16,   type:'pass'}, // platform 1 (lower) — moved from y=1000
   {x:560,    y:770,      w:120, h:16,   type:'pass'}, // platform 2 (upper)
-  {x:90,     y:570,      w:270, h:423,  type:'solid'}, // platform 3 — left; tripled scale (was w:90 h:141)
+  {x:130,    y:220,      w:270, h:423,  type:'solid'}, // platform 3 — left; moved from y=570 to y=220, x=90→130
   {x:560,    y:390,      w:130, h:16,   type:'pass'}, // platform 4 — right, wall-jump + bounce reach
-  {x:90,     y:220,      w:130, h:16,   type:'pass'}, // platform 5 — left, wall-jump reach from plat 4
+  // platform 5 (x:90, y:220, w:130, h:16, type:'pass', billboard_5) — REMOVED; recorded in CLAUDE.md
   {x:300,    y:80,       w:220, h:16,   type:'pass'}, // platform 6 — top, wide landing pad for goal
 ];
 
@@ -199,13 +199,16 @@ const enemies = [
   {x:10,  y:723,  w:18, h:51, ox:10,  range:0, speed:0, dir:0, rot:Math.PI/2},       // left wall spike 3
   {x:10,  y:672,  w:18, h:51, ox:10,  range:0, speed:0, dir:0, rot:Math.PI/2},       // left wall spike 4
   {x:10,  y:621,  w:18, h:51, ox:10,  range:0, speed:0, dir:0, rot:Math.PI/2},       // left wall spike 5
-  {x:90,  y:552,  w:45, h:18, ox:90,  range:0, speed:0, dir:0},                      // platform 3 top spike 1
-  {x:135, y:552,  w:45, h:18, ox:135, range:0, speed:0, dir:0},                      // platform 3 top spike 2
-  {x:180, y:552,  w:45, h:18, ox:180, range:0, speed:0, dir:0},                      // platform 3 top spike 3
-  {x:225, y:552,  w:45, h:18, ox:225, range:0, speed:0, dir:0},                      // platform 3 top spike 4
-  {x:270, y:552,  w:45, h:18, ox:270, range:0, speed:0, dir:0},                      // platform 3 top spike 5
-  {x:315, y:552,  w:45, h:18, ox:315, range:0, speed:0, dir:0},                      // platform 3 top spike 6
-  {x:812, y:640,  w:18, h:51, ox:812, range:0, speed:0, dir:0, rot:-Math.PI/2},      // right wall spike
+  {x:130, y:202,  w:45, h:18, ox:130, range:0, speed:0, dir:0},                      // platform 3 top spike 1
+  {x:175, y:202,  w:45, h:18, ox:175, range:0, speed:0, dir:0},                      // platform 3 top spike 2
+  {x:220, y:202,  w:45, h:18, ox:220, range:0, speed:0, dir:0},                      // platform 3 top spike 3
+  {x:265, y:202,  w:45, h:18, ox:265, range:0, speed:0, dir:0},                      // platform 3 top spike 4
+  {x:310, y:202,  w:45, h:18, ox:310, range:0, speed:0, dir:0},                      // platform 3 top spike 5
+  {x:355, y:202,  w:45, h:18, ox:355, range:0, speed:0, dir:0},                      // platform 3 top spike 6
+  {x:812, y:640,  w:18, h:51, ox:812, range:0, speed:0, dir:0, rot:-Math.PI/2},      // right wall spike (from prev session)
+  {x:812, y:250,  w:18, h:51, ox:812, range:0, speed:0, dir:0, rot:-Math.PI/2},      // right wall spike 1 (task 3)
+  {x:812, y:301,  w:18, h:51, ox:812, range:0, speed:0, dir:0, rot:-Math.PI/2},      // right wall spike 2 (task 3)
+  {x:812, y:352,  w:18, h:51, ox:812, range:0, speed:0, dir:0, rot:-Math.PI/2},      // right wall spike 3 (task 3)
 ];
 
 // goal
@@ -905,7 +908,7 @@ const BILLBOARD_IMGS = [];
 })();
 // Map floating-platform slot (0–5) to BILLBOARD_IMGS index (0–5)
 // Pattern 1,2,long,4,5,3 — no two adjacent platforms share the same image
-const BILLBOARD_PLAT_MAP = [0, 1, 5, 3, 4, 2];
+const BILLBOARD_PLAT_MAP = [0, 1, 5, 3, 2]; // slot 4 was billboard_5 (platform 5 removed)
 // Visible content bounding box per billboard (px, measured from transparent edges via Pillow)
 // { sx, sy, sw, sh } = source crop rect
 const BILLBOARD_CROP = [
