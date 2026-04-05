@@ -523,3 +523,32 @@ p.prevWallContact = p.wallContact;
 - Fallback: original filled rectangles drawn if image not yet loaded
 
 **Locked layers not touched:** Physics constants, hitbox dimensions, kill/collision logic, camera, controls.
+
+## Level Layout Changes — Session 2
+
+### Platform 1 moved (y=1000 → y=865)
+staticPlats[3] moved upward. Spike added on left side of top edge: `{x:80, y:847, w:51, h:18}` (standard orientation, sitting on platform top).
+
+### Left-wall spike gauntlet (5 spikes, rot=Math.PI/2)
+Five rotated spikes mounted on the left wall, back-to-back from y=825 upward:
+- y positions: 825, 774, 723, 672, 621 (each 51px tall, stacked with no gap)
+- Hitbox per spike: w=18, h=51 (rotated dimensions — narrow and tall)
+- x=10 (partially inside left wall, tips pointing right into level)
+- `rot: Math.PI/2` — 90° CW rotation so spike tips face right
+
+### Platform 3 tripled (w:90→270, h:141→423)
+staticPlats[5] (x=90, y=570) width and height both tripled. Billboard visual scales automatically via the existing `drawH = p.w * c.sh / c.sw` formula (new drawH ≈ 521, overflows below hitbox intentionally). Six spikes (w=45 each, 6×45=270px total) cover the full top edge at y=552.
+
+### Right-wall spike (rot=-Math.PI/2)
+One spike at x=812, y=640: `{x:812, y:640, w:18, h:51, rot:-Math.PI/2}`. Tips point left (away from right wall). x=812 places the right edge at 830, overlapping right wall (x=824) by 6px — symmetric with left-wall spike x=10 overlap.
+
+### Rotated enemy rendering
+`drawWorld()` enemy loop now checks `e.rot`. If truthy:
+```js
+ctx.save();
+ctx.translate(e.x + e.w/2, e.y + e.h/2);
+ctx.rotate(e.rot);
+ctx.drawImage(SPIKES_IMG, c.sx, c.sy, c.sw, c.sh, -e.h/2, -e.w/2, e.h, e.w);
+ctx.restore();
+```
+Draw args `-e.h/2, -e.w/2, e.h, e.w` draw the original (wide) image centered, then rotation reorients it. For `rot=PI/2` the 51×18 source renders as 18×51 in world space with tips pointing right; for `rot=-PI/2` tips point left. Unrotated enemies (`e.rot` falsy) use the original draw path unchanged.
