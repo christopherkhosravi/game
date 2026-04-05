@@ -643,6 +643,7 @@ function update() {
     spawnParticles(p.x+p.w/2, p.y+p.h/2, P.bounceFx, 12, 5, 5, 18);
     spawnParticles(p.x+p.w/2, p.y+p.h/2, P.h5, 6, 3, 3, 12);
     for (const e of enemies) {
+      if (e.range === 0) continue;
       const dx = e.x - p.x;
       if (Math.abs(dx) < QUAKE_RADIUS) {
         e.dir = dx >= 0 ? 1 : -1;
