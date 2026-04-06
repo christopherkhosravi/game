@@ -577,3 +577,28 @@ All 6 top spikes updated: y 552→202 (=220−18), x positions shifted right by 
 
 ### Right-wall spike trio at y=250 (rot=-Math.PI/2)
 Three spikes added side by side (vertically stacked, downward) at x=812, y=250/301/352. Each: `{w:18, h:51, rot:-Math.PI/2}`. Tips point left into level. Stacked flush with no gap (each h=51).
+
+## Level Layout Changes — Session 4 (redo)
+
+### Vertical play space tripled — upward only
+
+**Wall hitboxes extended:** `h:1420 → h:4180`, `y:LH-1420 → y:LH-4180` on both walls.
+- Old play space: GROUND_Y − (LH−1420) = 1440 − 60 = **1380 units**
+- New play space: 3 × 1380 = **4140 units** (wall top at y = −2700)
+- All platforms, enemies, goal, spawn unchanged — extension is empty space above
+
+**Wall building rendering decoupled from physical height:**
+`drawH` changed from `p.h * 1.20` to `1420 * 1.20` (fixed). Anchor changed from `p.y` to `LH-1420` (the original wall top, y=60). This keeps the building image pixel-identical to before — the extended wall space above y≈0 shows background only, which is correct for new empty space.
+
+**Why the previous attempt showed "really long downwards":** `drawH = p.h * 1.20` with the tripled wall (h=4180) produced drawH=5016, stretching the building image 3× and pushing its bottom to y≈2138 — visually far below the floor. The fixed anchor eliminates this.
+
+### Background parallax reduced to 0.3×
+
+Formula changed in `drawBackground()`:
+```js
+// was: let bgY = (LH - cam.y) * 2 - dH;
+let bgY = (CH - dH) - (cam.y - (LH - CH / 2)) * 0.6;
+```
+- At spawn (cam.y = LH−CH/2 = 1007.5): bgY = CH−dH = 945−dH, then +200 from existing nudges → identical to before
+- Per-unit scroll rate: 0.6 canvas-px vs old 2.0 canvas-px = **0.3× camera speed**
+- Background stays visible across the full extended play space

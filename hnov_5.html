@@ -166,8 +166,8 @@ const GROUND_Y = 1440;
 // Vertical level: full-width rooftop floor + tall building walls with gap + interior platforms
 const staticPlats = [
   {x:226,    y:GROUND_Y, w:388,   h:20,  type:'solid'}, // floor — half-size w=388 h=20, centred: x=(LW-388)/2=226
-  {x:0,      y:LH-1420,  w:16,   h:1420, type:'solid'}, // left wall  — base at level bottom, rises upward
-  {x:LW-16,  y:LH-1420,  w:16,   h:1420, type:'solid'}, // right wall — same; gap is horizontal beside floor
+  {x:0,      y:LH-4180,  w:16,   h:4180, type:'solid'}, // left wall  — tripled play space (was h:1420); top at y=-2700
+  {x:LW-16,  y:LH-4180,  w:16,   h:4180, type:'solid'}, // right wall — same
   {x:80,     y:865,      w:120, h:16,   type:'pass'}, // platform 1 (lower) — moved from y=1000
   {x:560,    y:770,      w:120, h:16,   type:'pass'}, // platform 2 (upper)
   {x:130,    y:220,      w:270, h:423,  type:'solid'}, // platform 3 — left; moved from y=570 to y=220, x=90→130
@@ -1005,8 +1005,8 @@ function drawBackground() {
   bgX -= 30; // Manual adjustment: shift left
   bgX -= 15; // Additional nudge: shift left
   bgX = dW >= CW ? Math.max(CW - dW, Math.min(0, bgX)) : Math.min(0, bgX);
-  // Full vertical scrolling (1.0 parallax): background scrolls with camera.
-  let bgY = (LH - cam.y) * 2 - dH;
+  // Vertical parallax at 0.3x: anchored so spawn view is identical, scrolls at 30% camera speed.
+  let bgY = (CH - dH) - (cam.y - (LH - CH / 2)) * 0.6;
   bgY += 50; // Manual adjustment: shift down
   bgY += 150; // Additional nudge: shift down
   ctx.drawImage(frameImg, bgX, bgY, dW, dH);
@@ -1049,10 +1049,10 @@ function drawWorld() {
       if (BUILDING_IMG.complete && BUILDING_IMG.naturalWidth > 0) {
         const iw = BUILDING_IMG.naturalWidth;
         const ih = BUILDING_IMG.naturalHeight;
-        const drawH = p.h * 1.20;
+        const drawH = 1420 * 1.20; // fixed visual height — independent of physical wall h
         const drawW = iw * (drawH / ih);
-        // shift up so flatTopRow aligns with hitbox top (p.y)
-        const anchorY = p.y - BUILDING_PARAPET.flatTopRow * (drawH / ih);
+        // anchor to original wall top (LH-1420=60), not extended physical top
+        const anchorY = (LH - 1420) - BUILDING_PARAPET.flatTopRow * (drawH / ih);
         if (pi === 2) {
           // right wall — normal orientation
           ctx.drawImage(BUILDING_IMG, 0, 0, iw, ih, p.x, anchorY, drawW, drawH);
