@@ -602,3 +602,14 @@ let bgY = (CH - dH) - (cam.y - (LH - CH / 2)) * 0.6;
 - At spawn (cam.y = LH−CH/2 = 1007.5): bgY = CH−dH = 945−dH, then +200 from existing nudges → identical to before
 - Per-unit scroll rate: 0.6 canvas-px vs old 2.0 canvas-px = **0.3× camera speed**
 - Background stays visible across the full extended play space
+
+## Camera Clamp — Extended Level Top
+
+**Problem:** `updateCamera()` clamped `ty = Math.max(0, ty)`, preventing the camera from scrolling above world y=0. After the walls were extended to `h:4180` (top at y=−2700), the player could climb into that new space but the camera couldn't follow.
+
+**Fix:** Changed the clamp lower bound from `0` to `LH - 4180` (= −2700, the new wall top):
+```js
+ty = Math.max(LH - 4180, ty); // vertical: clamp to extended level top (y=-2700)
+```
+
+**Result:** Camera follows the player freely through the full extended play space above the existing platforms.

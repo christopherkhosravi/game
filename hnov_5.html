@@ -337,7 +337,7 @@ function updateCamera() {
   let tx = player.x - CW/4 + player.w/2;
   let ty = player.y - (CH / 2 - (LH - GROUND_Y) - player.h);
   tx = Math.max(0, Math.min(LW - CW/2, tx));
-  ty = Math.max(0, ty); // vertical: follow player freely, don't go above world top
+  ty = Math.max(LH - 4180, ty); // vertical: clamp to extended level top (y=-2700)
   cam.x += (tx - cam.x) * 0.1;
   cam.y += (ty - cam.y) * 0.1;
 }
