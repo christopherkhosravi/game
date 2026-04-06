@@ -96,6 +96,7 @@ git push origin main:gh-pages
 
 ### Before Every Task
 - **Read `CLAUDE.md` first.** If the user says "read CLAUDE.md" or starts a new session, re-read this file before doing anything.
+- **Only re-read CLAUDE.md at the start of a new session or when explicitly told to.** Do not re-read it between tasks in the same session.
 - **Read the relevant section(s) of `hnov_5.html`** before making changes. Never edit code you haven't read in this session.
 
 ### Code Changes
