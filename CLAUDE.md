@@ -614,3 +614,19 @@ ty = Math.max(LH - 4180, ty); // vertical: clamp to extended level top (y=-2700)
 ```
 
 **Result:** Camera follows the player freely through the full extended play space above the existing platforms.
+
+## Camera Upper Clamp — y=-2625
+
+`updateCamera()` clamps `ty = Math.max(-2625, ty)`. This prevents the camera from scrolling above world y=−2625, leaving a small buffer (75 units) below the absolute level top at y=−2700.
+
+## All Spike Enemies Removed
+
+The `enemies` array was cleared of all 17 spike entries (platform spikes, left-wall spike gauntlet, platform-3 top spikes, right-wall spikes). The array is now empty. All enemy-loop code (`update`, collision, render) remains in place and is a no-op with an empty array.
+
+**Removed entries (for reference):**
+- Platform 2 spike: `{x:564, y:752, w:51, h:18, ox:564, range:0, speed:0, dir:0}`
+- Platform 1 spike: `{x:80, y:847, w:51, h:18, ox:80, range:0, speed:0, dir:0}`
+- Left wall spikes ×5: x=10, y=825/774/723/672/621, w:18, h:51, rot:Math.PI/2
+- Platform 3 top spikes ×6: x=130–355 (step 45), y=202, w:45, h:18
+- Right wall spike (prev session): x=812, y=640, w:18, h:51, rot:-Math.PI/2
+- Right wall spikes ×3 (session 3): x=812, y=250/301/352, w:18, h:51, rot:-Math.PI/2

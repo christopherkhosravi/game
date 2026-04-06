@@ -192,23 +192,6 @@ const rotBarriers = [
 // patrol enemies {x,y,w,h, ox, range, speed, dir[, rot]}
 // rot: optional rotation in radians for wall-mounted spikes (PI/2 = tips right, -PI/2 = tips left)
 const enemies = [
-  {x:564, y:752,  w:51, h:18, ox:564, range:0, speed:0, dir:0},                      // platform 2 spike
-  {x:80,  y:847,  w:51, h:18, ox:80,  range:0, speed:0, dir:0},                      // platform 1 spike (left side)
-  {x:10,  y:825,  w:18, h:51, ox:10,  range:0, speed:0, dir:0, rot:Math.PI/2},       // left wall spike 1
-  {x:10,  y:774,  w:18, h:51, ox:10,  range:0, speed:0, dir:0, rot:Math.PI/2},       // left wall spike 2
-  {x:10,  y:723,  w:18, h:51, ox:10,  range:0, speed:0, dir:0, rot:Math.PI/2},       // left wall spike 3
-  {x:10,  y:672,  w:18, h:51, ox:10,  range:0, speed:0, dir:0, rot:Math.PI/2},       // left wall spike 4
-  {x:10,  y:621,  w:18, h:51, ox:10,  range:0, speed:0, dir:0, rot:Math.PI/2},       // left wall spike 5
-  {x:130, y:202,  w:45, h:18, ox:130, range:0, speed:0, dir:0},                      // platform 3 top spike 1
-  {x:175, y:202,  w:45, h:18, ox:175, range:0, speed:0, dir:0},                      // platform 3 top spike 2
-  {x:220, y:202,  w:45, h:18, ox:220, range:0, speed:0, dir:0},                      // platform 3 top spike 3
-  {x:265, y:202,  w:45, h:18, ox:265, range:0, speed:0, dir:0},                      // platform 3 top spike 4
-  {x:310, y:202,  w:45, h:18, ox:310, range:0, speed:0, dir:0},                      // platform 3 top spike 5
-  {x:355, y:202,  w:45, h:18, ox:355, range:0, speed:0, dir:0},                      // platform 3 top spike 6
-  {x:812, y:640,  w:18, h:51, ox:812, range:0, speed:0, dir:0, rot:-Math.PI/2},      // right wall spike (from prev session)
-  {x:812, y:250,  w:18, h:51, ox:812, range:0, speed:0, dir:0, rot:-Math.PI/2},      // right wall spike 1 (task 3)
-  {x:812, y:301,  w:18, h:51, ox:812, range:0, speed:0, dir:0, rot:-Math.PI/2},      // right wall spike 2 (task 3)
-  {x:812, y:352,  w:18, h:51, ox:812, range:0, speed:0, dir:0, rot:-Math.PI/2},      // right wall spike 3 (task 3)
 ];
 
 // goal
@@ -337,7 +320,7 @@ function updateCamera() {
   let tx = player.x - CW/4 + player.w/2;
   let ty = player.y - (CH / 2 - (LH - GROUND_Y) - player.h);
   tx = Math.max(0, Math.min(LW - CW/2, tx));
-  ty = Math.max(LH - 4180, ty); // vertical: clamp to extended level top (y=-2700)
+  ty = Math.max(-2625, ty); // vertical: clamp to y=-2625 (just above extended level top)
   cam.x += (tx - cam.x) * 0.1;
   cam.y += (ty - cam.y) * 0.1;
 }
