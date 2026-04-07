@@ -917,9 +917,19 @@ SPIKES_IMG.src = 'animations/spikes.png';
 const SPIKES_CROP = {sx:164, sy:400, sw:704, sh:249};
 
 function updateBgVideo() {
-  bgFrameIdx += bgDir;
-  if (bgFrameIdx >= BG_FRAMES.length - 1) { bgFrameIdx = BG_FRAMES.length - 1; bgDir = -1; }
-  if (bgFrameIdx <= 0)                     { bgFrameIdx = 0;                     bgDir =  1; }
+  if (bgDir === 1) {
+    bgFrameIndex++;
+    if (bgFrameIndex >= 10) {
+      bgFrameIndex = 9;
+      bgDir = -1;
+    }
+  } else {
+    bgFrameIndex--;
+    if (bgFrameIndex < 0) {
+      bgFrameIndex = 0;
+      bgDir = 1;
+    }
+  }
 }
 
 // Sprite is drawn at 2x hitbox dimensions: 24x32 px, centred on the hitbox
@@ -1841,6 +1851,7 @@ window.submitScore = async function(name, time_ms) {
   return rows[0];
 };
 
+startBgFramePreload();
 loop();
 </script>
 </body>
