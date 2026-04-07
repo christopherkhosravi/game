@@ -649,3 +649,21 @@ The parallax factor (0.6) doesn't push the image up fast enough to cover the can
 bgY = Math.min(0, bgY); // clamp: never let top edge drop below canvas top
 ```
 This ensures the background's top edge is always at or above canvas y=0, regardless of how high the camera scrolls. The parallax still runs normally — the clamp only engages when the image would otherwise expose black at the top.
+
+## Wall Tiling Above Building Image
+
+**Problem:** The walls (left and right) have no visual above world y≈−0.61 (the top of the building image). The level extends to y=−2700 and the camera reaches y=−2625, leaving a ~2667-unit bare gap on both sides.
+
+**Fix:** After drawing the existing building image for each wall (pi=1, pi=2 in the static platform loop), a tiling loop runs upward from `anchorY` to `TILE_TOP_Y = −2668`, drawing the same source slice repeatedly.
+
+**Tile slice:** world y 1324–1424 of the existing drawing, which maps to source image rows ≈765–823 (57.7 source px). This falls in a clean repeating window section of the image (no unique features like roofline or signage). Each tile is 100 world units tall in destination space.
+
+**Key numbers:**
+- `sy0 = (1324 − anchorY) × ih / drawH ≈ 764.9` (source row at world y=1324)
+- `sy1 = (1424 − anchorY) × ih / drawH ≈ 822.7` (source row at world y=1424)
+- `tSrcH = sy1 − sy0 ≈ 57.7` source px per tile
+- 27 tiles total; the topmost tile is a partial (≈67 world units, clipped to y=−2668)
+
+**Clip logic:** For the topmost (partial) tile, `srcY` is offset into the slice so that the bottom of the source aligns with the bottom of the destination tile — the top is cropped, never stretched.
+
+**Mirror:** Left wall (pi=1) uses negative `drawW` as destination width, identical to the existing full-image draw, so tiling inherits the horizontal mirror automatically.

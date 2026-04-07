@@ -1044,6 +1044,28 @@ function drawWorld() {
           // left wall — mirrored horizontally, right edge aligned to hitbox right edge
           ctx.drawImage(BUILDING_IMG, 0, 0, iw, ih, p.x + p.w, anchorY, -drawW, drawH);
         }
+
+        // Tile a repeating slice upward to fill the gap above the building image.
+        // Slice: world y 1324–1424 from the existing drawing (clean repeating window section).
+        // Repeats upward until y=-2668 (2 character heights below ceiling y=-2700).
+        const TILE_TOP_Y = -2668;
+        const TILE_WH    = 100; // world units per tile
+        const sy0   = (1324 - anchorY) * ih / drawH;
+        const sy1   = (1424 - anchorY) * ih / drawH;
+        const tSrcH = sy1 - sy0;
+        let tileBot = anchorY;
+        while (tileBot > TILE_TOP_Y) {
+          const tileTop = Math.max(tileBot - TILE_WH, TILE_TOP_Y);
+          const tileH   = tileBot - tileTop;
+          const srcY    = sy0 + ((TILE_WH - tileH) / TILE_WH) * tSrcH;
+          const srcH    = tSrcH * (tileH / TILE_WH);
+          if (pi === 2) {
+            ctx.drawImage(BUILDING_IMG, 0, srcY, iw, srcH, p.x, tileTop, drawW, tileH);
+          } else {
+            ctx.drawImage(BUILDING_IMG, 0, srcY, iw, srcH, p.x + p.w, tileTop, -drawW, tileH);
+          }
+          tileBot = tileTop;
+        }
         continue;
       }
     }
