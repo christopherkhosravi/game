@@ -650,20 +650,33 @@ bgY = Math.min(0, bgY); // clamp: never let top edge drop below canvas top
 ```
 This ensures the background's top edge is always at or above canvas y=0, regardless of how high the camera scrolls. The parallax still runs normally — the clamp only engages when the image would otherwise expose black at the top.
 
-## Wall Tiling Above Building Image
+## Wall Three-Part Draw (Rooftop + Tiled Windows + Lower Building)
 
-**Problem:** The walls (left and right) have no visual above world y≈−0.61 (the top of the building image). The level extends to y=−2700 and the camera reaches y=−2625, leaving a ~2667-unit bare gap on both sides.
+**Problem (previous approach):** The old code drew the full building image anchored at world y≈−0.61 (rooftop at ground level), then tiled a window slice upward above it. The seam at y=−0.61 was a content mismatch: the tile bottom showed mid-building windows while the original image top showed rooftop/antenna — visually incompatible regions placed flush against each other.
 
-**Fix:** After drawing the existing building image for each wall (pi=1, pi=2 in the static platform loop), a tiling loop runs upward from `anchorY` to `TILE_TOP_Y = −2668`, drawing the same source slice repeatedly.
+**Solution:** Restructure the wall draw into three parts so the rooftop cap sits at the top of the level and all joins occur within the repeating window section of the source image.
 
-**Tile slice:** world y 1324–1424 of the existing drawing, which maps to source image rows ≈765–823 (57.7 source px). This falls in a clean repeating window section of the image (no unique features like roofline or signage). Each tile is 100 world units tall in destination space.
+**Three-part structure (per wall, `pi=1` left / `pi=2` right):**
 
-**Key numbers:**
-- `sy0 = (1324 − anchorY) × ih / drawH ≈ 764.9` (source row at world y=1324)
-- `sy1 = (1424 − anchorY) × ih / drawH ≈ 822.7` (source row at world y=1424)
-- `tSrcH = sy1 − sy0 ≈ 57.7` source px per tile
-- 27 tiles total; the topmost tile is a partial (≈67 world units, clipped to y=−2668)
+| Part | Source rows | World y range | Purpose |
+|---|---|---|---|
+| 1 — rooftop cap | 0–431 | `TOP_Y` to `TOP_Y + 431×s` | Rooftop, parapet, upper floors |
+| 2 — tiled windows | 148–431 × N tiles | `p1Bot` to `p3Top` | Fill bulk of extended wall height |
+| 3 — lower building | 148–984 | `p3Top` to `p3Top + 836×s` | Mid-building down through floor level |
 
-**Clip logic:** For the topmost (partial) tile, `srcY` is offset into the slice so that the bottom of the source aligns with the bottom of the destination tile — the top is cropped, never stretched.
+**Key constants:**
+- `s = 1704 / 984` — world units per source row (same visual scale as before)
+- `TOP_Y = −2668` — rooftop anchor (2 character-heights below ceiling y=−2700)
+- `p1Bot = TOP_Y + 431×s ≈ −1921.9` — bottom of part 1
+- `tileDestH = 283×s ≈ 490.1` — world units per tile (rows 148–431)
+- `nTiles = ceil(max(0, GROUND_Y − p3DestH − p1Bot) / tileDestH) = 4` — tiles needed so part 3 reaches the floor
+- `p3Top = p1Bot + 4 × tileDestH ≈ 38.5` — top of part 3; row 148 anchored here
 
-**Mirror:** Left wall (pi=1) uses negative `drawW` as destination width, identical to the existing full-image draw, so tiling inherits the horizontal mirror automatically.
+**Seam analysis:**
+- Part 1 → tile join (y≈−1921.9): source row 431 meets tile row 148. Both are within the clean repeating window section (rows 148–431), so only a minor offset (~0.05 window heights) is possible.
+- Tile → part 3 join (y≈38.5): same rows (431 → 148), same minor offset.
+- Both joins are window-to-window — far less noticeable than the previous rooftop-to-window mismatch.
+
+**Mirror:** Left wall (`pi=1`) uses `dx = p.x + p.w`, `dw = −drawW` (negative width mirrors the image). Right wall (`pi=2`) uses `dx = p.x`, `dw = drawW`. Same sign convention for all three drawImage calls.
+
+**Coverage:** Part 3 bottom ≈ world y 1486, which extends past GROUND_Y=1440 (off-screen below floor). No gap at any camera position between y=−2625 and GROUND_Y.

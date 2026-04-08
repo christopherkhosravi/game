@@ -1029,43 +1029,36 @@ function drawWorld() {
       continue;
     }
     if (pi === 1 || pi === 2) {
-      // walls — draw building_prepped.png scaled to full wall height + 5%
+      // walls — three-part draw: rooftop cap at ceiling, tiled windows in middle, lower building at bottom
       if (BUILDING_IMG.complete && BUILDING_IMG.naturalWidth > 0) {
-        const iw = BUILDING_IMG.naturalWidth;
-        const ih = BUILDING_IMG.naturalHeight;
-        const drawH = 1420 * 1.20; // fixed visual height — independent of physical wall h
-        const drawW = iw * (drawH / ih);
-        // anchor to original wall top (LH-1420=60), not extended physical top
-        const anchorY = (LH - 1420) - BUILDING_PARAPET.flatTopRow * (drawH / ih);
-        if (pi === 2) {
-          // right wall — normal orientation
-          ctx.drawImage(BUILDING_IMG, 0, 0, iw, ih, p.x, anchorY, drawW, drawH);
-        } else {
-          // left wall — mirrored horizontally, right edge aligned to hitbox right edge
-          ctx.drawImage(BUILDING_IMG, 0, 0, iw, ih, p.x + p.w, anchorY, -drawW, drawH);
-        }
+        const iw = BUILDING_IMG.naturalWidth;   // 287
+        const ih = BUILDING_IMG.naturalHeight;  // 984
+        const s       = 1704 / 984;             // world units per source row
+        const drawW   = iw * s;
+        const TOP_Y   = -2668;                  // rooftop anchor: 2 char-heights below ceiling
 
-        // Tile a repeating slice upward to fill the gap above the building image.
-        // Slice: world y 1324–1424 from the existing drawing (clean repeating window section).
-        // Repeats upward until y=-2668 (2 character heights below ceiling y=-2700).
-        const TILE_TOP_Y = -2668;
-        const TILE_WH    = 100; // world units per tile
-        const sy0   = (1324 - anchorY) * ih / drawH;
-        const sy1   = (1424 - anchorY) * ih / drawH;
-        const tSrcH = sy1 - sy0;
-        let tileBot = anchorY;
-        while (tileBot > TILE_TOP_Y) {
-          const tileTop = Math.max(tileBot - TILE_WH, TILE_TOP_Y);
-          const tileH   = tileBot - tileTop;
-          const srcY    = sy0 + ((TILE_WH - tileH) / TILE_WH) * tSrcH;
-          const srcH    = tSrcH * (tileH / TILE_WH);
-          if (pi === 2) {
-            ctx.drawImage(BUILDING_IMG, 0, srcY, iw, srcH, p.x, tileTop, drawW, tileH);
-          } else {
-            ctx.drawImage(BUILDING_IMG, 0, srcY, iw, srcH, p.x + p.w, tileTop, -drawW, tileH);
-          }
-          tileBot = tileTop;
+        // Part 1: source rows 0–431, rooftop cap anchored at TOP_Y
+        const p1SrcH  = 431;
+        const p1DestH = p1SrcH * s;
+        const p1Bot   = TOP_Y + p1DestH;
+
+        // Part 2: tile source rows 148–431 downward until part 3 covers the floor
+        const tileSrcH  = 431 - 148;
+        const tileDestH = tileSrcH * s;
+        const p3SrcH    = ih - 148;
+        const p3DestH   = p3SrcH * s;
+        const nTiles    = Math.ceil(Math.max(0, GROUND_Y - p3DestH - p1Bot) / tileDestH);
+        const p3Top     = p1Bot + nTiles * tileDestH;
+
+        // right wall: dx = left edge, dw positive; left wall: dx = right edge, dw negative (mirror)
+        const dx = pi === 2 ? p.x : p.x + p.w;
+        const dw = pi === 2 ? drawW : -drawW;
+
+        ctx.drawImage(BUILDING_IMG, 0, 0,   iw, p1SrcH,  dx, TOP_Y,  dw, p1DestH);
+        for (let i = 0; i < nTiles; i++) {
+          ctx.drawImage(BUILDING_IMG, 0, 148, iw, tileSrcH, dx, p1Bot + i * tileDestH, dw, tileDestH);
         }
+        ctx.drawImage(BUILDING_IMG, 0, 148, iw, p3SrcH,  dx, p3Top,  dw, p3DestH);
         continue;
       }
     }
