@@ -405,34 +405,9 @@ With these changes `animFrame` 0 → `bounce/2.png`, `animFrame` 1 → `bounce/3
 
 **Subtitles:** `drawCutsceneSubtitle(text)` draws a canvas box matching the title screen overlay style: `background:#0d0d1e`, inner border `2px solid #6a5acd`, outer border `1px solid #3a2a6e` offset 8px, text `#9a8acd` `30px "Courier New"`. Box is centred horizontally, 60px from canvas bottom.
 
-## Wall Grab Charge System
+## Wall Grab Charge System — REMOVED
 
-**What it does:** The player gets 3 wall grab charges per air cycle, shown as dots in the HUD (top-right, labelled GRAB). Each fresh wall contact consumes 1 charge. If 0 charges remain, touching a wall does nothing — the player slides past with no grab. Charges refresh on landing. The continuous `wallMeter` drain while actively grabbing is unchanged (no entry cost).
-
-**Key variables:**
-- `wallCharges` (int 0–3) — added to `makePlayer()`. Decremented on fresh wall contact; reset to 3 on `ry.landed`. Reset automatically on `respawn()`/`startGame()` via `makePlayer()`.
-- `prevWallContact` (bool) — retained to detect fresh vs. held contact.
-
-**HUD:** Three `abilityPip` dots (`wpip0–wpip2`) labelled GRAB in `#abilityBar`. Lit = charge available, dark = spent.
-
-**Implementation (wall meter block):**
-```
-if (p.wallContact) {
-  if (!p.prevWallContact) {
-    if (p.wallCharges === 0) { p.wallContact = false; p.wallDir = 0; }
-    else { p.wallCharges--; }
-  }
-  if (p.wallContact) {
-    p.wallMeter = Math.max(0, p.wallMeter - 1/3);
-    if (p.wallMeter === 0) { p.wallContact = false; p.wallDir = 0; }
-  }
-} else if (p.onGround) {
-  p.wallMeter = Math.min(100, p.wallMeter + 2);
-}
-p.prevWallContact = p.wallContact;
-```
-
-**Test:** Use 3 wall grabs in the air; 4th touch should not grab. Land and verify all 3 dots refill.
+All wall grab limits removed. Wall grab now works indefinitely with no charge count and no meter drain. `wallCharges`, `wallMeter` removed from `makePlayer()`. Wall meter block replaced with just `p.prevWallContact = p.wallContact`. HUD GRAB dots and WALL meter bar removed.
 
 ## Floor Visual — Building Parapet Strip
 
@@ -478,35 +453,15 @@ p.prevWallContact = p.wallContact;
 
 **Position notes:** Position is tunable — adjust `p.x` offset for left/right placement relative to the wall hitbox. Position was not finalized at implementation time.
 
-## Dash: 3 Uses Per Air Cycle
+## Dash, Float, Wall Grab — Unlimited
 
-**What changed:** `dashAvail` (bool) replaced with `dashCount` (int 0–3). The player can dash up to 3 times before landing; each dash decrements the counter. Landing resets it to 3. HUD updated from 1 pip (`pip0`) to 3 pips (`pip0–pip2`). Charging state (pink) shows while grounded and count < 3.
+All three mechanics have no limits, cooldowns, or resource costs. Removed from `makePlayer()`: `dashCount`, `floatMeter`, `wallMeter`, `wallCharges`. Removed HUD elements: DASH pips, GRAB pips, FLOAT meter bar, WALL meter bar. `#abilityBar` hidden via `display:none`.
 
-**Key variable:** `dashCount` in `makePlayer()`. All former `dashAvail` references updated.
+**Dash:** `p.dashTimer === 0` guard retained so rapid double-tap doesn't interrupt an active dash. No per-use decrement.
 
-**Test:** Dash 3 times in the air — 4th attempt should do nothing. Land and verify all 3 dots refill.
+**Float:** S toggles `p.floating` on/off with no drain. Landing still disables float.
 
-## Float: Toggle Instead of Hold
-
-**What changed:** Float is now triggered by pressing S once (toggle on), pressing S again toggles it off. Previously required holding S. The `floatMeter` still drains at 1/3 per frame while floating; hitting 0 auto-disables float. Landing also disables float.
-
-**Implementation:** `downP = jp(['KeyS'])` added to inputs block. Float block now checks `downP` to toggle `p.floating` rather than checking `down` (held).
-
-**Test:** Press S in the air — float should activate and stay on without holding. Press S again to cancel. Let meter drain to 0 and verify float stops automatically.
-
-## Meter Duration and Wall Fall Speed Tuning
-
-**What changed:**
-- Float meter drains at `1/3` per frame (was `1`) — 3× longer duration (300 frames from full instead of 100)
-- Wall grab meter drains at `1/3` per frame (was `1`) — 3× longer duration (300 frames from full instead of 100; 30-point entry cost unchanged)
-- `WALL_SLIDE_G` reduced from `0.07` to `0.035` — fall speed while wall-sliding is halved
-
-**Constants modified:**
-- `WALL_SLIDE_G` (line ~211, physics constants section) — `0.07` → `0.035`
-- Float drain (line ~547, update section) — `p.floatMeter - 1` → `p.floatMeter - 1/3`
-- Wall meter drain (line ~584, update section) — `p.wallMeter - 1` → `p.wallMeter - 1/3`
-
-**Test:** Hold S in the air and verify the float meter drains over ~5 seconds instead of ~1.7 s. Grab a wall and verify the meter drains over ~5 seconds. Wall-sliding should feel noticeably slower descent.
+**Wall grab:** Meter block removed entirely; wall contact is unlimited. `prevWallContact` retained for fresh-contact detection (used by wall-jump logic).
 
 ## Spike Strip Enemy Visual
 

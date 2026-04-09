@@ -24,18 +24,7 @@ body{
   color:#6a5acd;font-size:11px;letter-spacing:2px;
 }
 #hudLeft{display:flex;gap:16px;}
-#abilityBar{display:flex;gap:6px;align-items:center;}
-.abilityPip{
-  width:8px;height:8px;border-radius:50%;
-  background:#6a5acd;transition:background 0.1s;
-}
-.abilityPip.used{background:#1a1a2e;border:1px solid #3a2a6e;}
-.abilityPip.charging{background:#ff6b9d;}
-#floatMeter,#wallMeter{
-  width:40px;height:6px;background:#1a1a2e;border:1px solid #3a2a6e;
-  display:inline-block;vertical-align:middle;
-}
-#floatFill,#wallFill{height:100%;background:#6a5acd;transition:width 0.05s;}
+#abilityBar{display:none;}
 #controls{
   margin-top:6px;color:#2a1a4e;font-size:10px;
   letter-spacing:1px;text-align:center;line-height:2;
@@ -80,18 +69,8 @@ body{
     <div id="hudLeft">
       <span>HNOV</span>
       <span id="hudState">IDLE</span>
-      <span style="font-size:10px;letter-spacing:1px;margin-left:12px;margin-right:4px;">FLOAT</span>
-      <div id="floatMeter"><div id="floatFill" style="width:100%"></div></div>
-      <span style="font-size:10px;letter-spacing:1px;margin-left:12px;margin-right:4px;">WALL</span>
-      <div id="wallMeter"><div id="wallFill" style="width:100%"></div></div>
     </div>
     <div id="abilityBar">
-      <span style="font-size:10px;letter-spacing:1px;margin-right:2px;">DASH</span>
-      <div class="abilityPip" id="pip0"></div>
-      <div class="abilityPip" id="pip1"></div>
-      <span style="font-size:10px;letter-spacing:1px;margin-left:8px;margin-right:2px;">GRAB</span>
-      <div class="abilityPip" id="wpip0"></div>
-      <div class="abilityPip" id="wpip1"></div>
     </div>
   </div>
   <canvas id="gameCanvas" width="1680" height="945"></canvas>
@@ -237,15 +216,11 @@ function makePlayer() {
     wallDir:0,       // -1 left wall, 1 right wall, 0 none
     wallContact:false,
     prevWallContact:false,
-    wallMeter:100,
-    wallCharges:2,
     // abilities
-    dashCount:2,
     dashTimer:0,
     dashDir:1,
     dashGrace:0,
     floating:false,
-    floatMeter:100,
     justBounced:false,
     bouncing:false,       // true during the upward bounce arc
     jumpCount:0,          // 0=none, 1=jumped, 2=bounced
@@ -510,10 +485,9 @@ function update() {
   if (restP) { respawn(); return; }
 
   // — dash — Q=left, E=right
-  if ((dashQP || dashEP) && p.dashCount > 0 && p.dashTimer === 0) {
+  if ((dashQP || dashEP) && p.dashTimer === 0) {
     p.dashDir    = dashQP ? -1 : 1;
     p.facingRight = dashQP ? false : true;
-    p.dashCount--;
     p.dashTimer  = DASH_FRAMES;
     p.dashGrace  = DASH_FRAMES + DASH_GRACE;
     p.floating   = false;
@@ -544,15 +518,7 @@ function update() {
   // — float —
   if (!p.onGround && p.dashTimer <= 0) {
     if (downP) {
-      if (p.floating) {
-        p.floating = false;
-      } else if (p.floatMeter > 0) {
-        p.floating = true;
-      }
-    }
-    if (p.floating) {
-      p.floatMeter = Math.max(0, p.floatMeter - 1/3);
-      if (p.floatMeter === 0) p.floating = false;
+      p.floating = !p.floating;
     }
   } else {
     p.floating = false;
@@ -581,20 +547,6 @@ function update() {
     p.wallDir = 0;
   }
 
-  // — wall meter —
-  if (p.wallContact) {
-    if (!p.prevWallContact) {
-      // fresh wall contact: consume one charge
-      if (p.wallCharges === 0) { p.wallContact = false; p.wallDir = 0; }
-      else { p.wallCharges--; }
-    }
-    if (p.wallContact) {
-      p.wallMeter = Math.max(0, p.wallMeter - 1/3);
-      if (p.wallMeter === 0) { p.wallContact = false; p.wallDir = 0; }
-    }
-  } else if (p.onGround) {
-    p.wallMeter = Math.min(100, p.wallMeter + 2);
-  }
   p.prevWallContact = p.wallContact;
 
   // — wall jump —
@@ -674,8 +626,6 @@ function update() {
 
   if (ry.landed) {
     p.onGround = true;
-    p.dashCount   = 2;
-    p.wallCharges = 2;
     p.floating    = false;
     p.bouncing  = false;
     p.jumpCut   = false;
@@ -688,7 +638,6 @@ function update() {
   } else {
     p.onGround = false;
   }
-  if (p.onGround) p.floatMeter = Math.min(100, p.floatMeter + 2);
   if (ry.hitCeil) p.jumpCut = true;
 
   if (p.quakeTimer > 0) p.quakeTimer--;
@@ -766,14 +715,6 @@ function update() {
 
   const stateLabel = p.bouncing ? 'BOUNCE' : p.state.toUpperCase();
   document.getElementById('hudState').textContent = stateLabel;
-  for (let i = 0; i < 2; i++) {
-    document.getElementById('pip' + i).className = 'abilityPip' + (i < p.dashCount ? '' : (p.onGround ? ' charging' : ' used'));
-  }
-  for (let i = 0; i < 2; i++) {
-    document.getElementById('wpip' + i).className = 'abilityPip' + (i < p.wallCharges ? '' : ' used');
-  }
-  document.getElementById('floatFill').style.width = p.floatMeter + '%';
-  document.getElementById('wallFill').style.width = p.wallMeter + '%';
 
   if (screenShake > 0) screenShake--;
 
