@@ -845,6 +845,16 @@ const BILLBOARD_CROP = [
   {sx:137, sy:81,  sw:559, sh:1079}, // long_billboard (832×1248; frame+mechanism; frame ends ~y=955)
 ];
 
+// Kullad end-flag animation — 193 RGBA PNGs extracted from glowing cup.mp4
+const KULLAD_IMGS = [];
+(function() {
+  for (let i = 1; i <= 193; i++) {
+    const img = new Image();
+    img.src = `animations/kullad/${i}.png`;
+    KULLAD_IMGS.push(img);
+  }
+})();
+
 // Building rooftop image — parapet strip drawn over the floor platform (staticPlats[0])
 // Source: 287×984 RGBA PNG; sh=137 covers rows 0–136 (parapet + upper building face)
 const BUILDING_IMG = new Image();
@@ -1128,19 +1138,21 @@ function drawWorld() {
   }
 
   // — goal —
-  const gt = (frame * 0.05) % (Math.PI*2);
-  // pole
-  r(GOAL.x+3, GOAL.y, 3, GOAL.h, '#3a2a5e');
-  // flag body
-  r(GOAL.x+6, GOAL.y+2, 14, 10, '#6a5acd');
-  r(GOAL.x+6, GOAL.y+2, 14, 3,  '#9a8aff');
-  r(GOAL.x+18, GOAL.y+2, 2, 10, '#0a0a14');
-  // glow pulse
-  ctx.fillStyle = `rgba(154,138,255,${0.15 + Math.sin(gt)*0.1})`;
-  ctx.fillRect(GOAL.x-4, GOAL.y-4, GOAL.w+8, GOAL.h+8);
-  ctx.fillStyle = '#9a8aff';
-  ctx.font = '7px monospace';
-  ctx.fillText('END', GOAL.x+1, GOAL.y-4);
+  const kSize = 80;
+  const kx = GOAL.x + GOAL.w / 2 - kSize / 2;
+  const ky = GOAL.y + GOAL.h / 2 - kSize / 2;
+  const kImg = KULLAD_IMGS[Math.floor(frame * 0.4) % KULLAD_IMGS.length];
+  if (kImg && kImg.complete && kImg.naturalWidth > 0) {
+    ctx.drawImage(kImg, kx, ky, kSize, kSize);
+  } else {
+    // fallback while frames load
+    const gt = (frame * 0.05) % (Math.PI * 2);
+    r(GOAL.x+3, GOAL.y, 3, GOAL.h, '#3a2a5e');
+    r(GOAL.x+6, GOAL.y+2, 14, 10, '#6a5acd');
+    r(GOAL.x+6, GOAL.y+2, 14, 3,  '#9a8aff');
+    ctx.fillStyle = `rgba(154,138,255,${0.15 + Math.sin(gt)*0.1})`;
+    ctx.fillRect(GOAL.x-4, GOAL.y-4, GOAL.w+8, GOAL.h+8);
+  }
 
   // — particles —
   for (const pt of particles) {
