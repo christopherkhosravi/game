@@ -147,12 +147,12 @@ const staticPlats = [
   {x:226,    y:GROUND_Y, w:388,   h:20,  type:'solid'}, // floor — half-size w=388 h=20, centred: x=(LW-388)/2=226
   {x:0,      y:LH-4180,  w:16,   h:4180, type:'solid'}, // left wall  — tripled play space (was h:1420); top at y=-2700
   {x:LW-16,  y:LH-4180,  w:16,   h:4180, type:'solid'}, // right wall — same
-  {x:80,     y:865,      w:120, h:16,   type:'pass'}, // platform 1 (lower) — moved from y=1000
-  {x:560,    y:770,      w:120, h:16,   type:'pass'}, // platform 2 (upper)
+  {x:80,     y:865,      w:120, h:104,  type:'solid'}, // platform 1 (lower) — moved from y=1000
+  {x:560,    y:770,      w:120, h:104,  type:'solid'}, // platform 2 (upper)
   {x:130,    y:220,      w:270, h:423,  type:'solid'}, // platform 3 — left; moved from y=570 to y=220, x=90→130
-  {x:560,    y:390,      w:130, h:16,   type:'pass'}, // platform 4 — right, wall-jump + bounce reach
+  {x:560,    y:390,      w:130, h:113,  type:'solid'}, // platform 4 — right, wall-jump + bounce reach
   // platform 5 (x:90, y:220, w:130, h:16, type:'pass', billboard_5) — REMOVED; recorded in CLAUDE.md
-  {x:300,    y:80,       w:220, h:16,   type:'pass'}, // platform 6 — top, wide landing pad for goal
+  {x:300,    y:80,       w:220, h:191,  type:'solid'}, // platform 6 — top, wide landing pad for goal
 ];
 
 // moving platforms {x,y,w,h, ox,oy, dx,dy, range, t}

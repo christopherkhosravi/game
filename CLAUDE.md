@@ -283,17 +283,9 @@ The `groundStates` array in `drawHnov()` controls which states receive a `+8 px`
 
 The `drawHnov()` function previously drew a semi-transparent black ellipse (`rgba(0,0,0,0.20)`, horizontal radius `SPRITE_W * 0.45`, vertical radius 3) just below the player's feet on every frame. It was unconditional — present in the air as well as on the ground. These five lines were removed entirely. No other sprite rendering was changed.
 
-## One-Way (Pass-Through) Floating Platforms
+## Floating Platforms — Solid Collision
 
-**What it does:** The 6 floating platforms (staticPlats indices 3–8) use `type:'pass'` instead of `type:'solid'`. The player lands on top but passes through freely from below and from the sides. The floor and walls remain `type:'solid'` and are unaffected.
-
-**How it works:** The collision helpers already segregate by type:
-- `resolveY` top-landing check runs for all types — no change needed.
-- `resolveY` ceiling check is guarded by `if (p.type === 'solid')` — so jumping into the underside has no effect on `'pass'` platforms.
-- `resolveX` skips any platform where `type !== 'solid'` — so walking into the side has no effect.
-- Wall-contact detection (line ~512) is also `solid`-only.
-
-The entire fix is changing `type:'solid'` → `type:'pass'` on the 6 floating platform entries in `staticPlats`.
+All floating billboard platforms (staticPlats indices 3–7) use `type:'solid'`, giving full AABB collision on all sides (top landing, ceiling, and side walls). The floor (index 0) and walls (indices 1–2) are also `type:'solid'` and were not changed.
 
 ## Billboard Platform Visuals
 
@@ -302,20 +294,21 @@ The entire fix is changing `type:'solid'` → `type:'pass'` on the 6 floating pl
 **Assets:** `animations/billboard_1.png` through `billboard_5.png` — 1024×1024 RGBA PNGs with transparent backgrounds and neon pixel-art billboard designs. `animations/long_billboard.png` — 832×1248 RGBA PNG, portrait chai-tea billboard with hanging mechanism (white bg removed via Pillow flood-fill).
 
 **Assignment (BILLBOARD_PLAT_MAP):**
-| Floating slot | staticPlats index | Billboard |
-|---|---|---|
-| 0 | 3 (platform 1, left, y=1000) | billboard_1 |
-| 1 | 4 (platform 2, right, y=770) | billboard_2 |
-| 2 | 5 (platform 3, left, y=570) | long_billboard |
-| 3 | 6 (platform 4, right, y=390) | billboard_4 |
-| 4 | 7 (platform 5, left, y=220) | billboard_5 |
-| 5 | 8 (platform 6 top, y=80) | billboard_3 |
+| Floating slot | staticPlats index | Billboard | Hitbox (w×h) | Content (Pillow getbbox) |
+|---|---|---|---|---|
+| 0 | 3 (platform 1, y=865) | billboard_1 | 120×104 | 694×601 |
+| 1 | 4 (platform 2, y=770) | billboard_2 | 120×104 | 694×602 |
+| 2 | 5 (platform 3, y=220) | long_billboard | 270×423 | 559×874 (frame only) |
+| 3 | 6 (platform 4, y=390) | billboard_4 | 130×113 | 694×601 |
+| 4 | 7 (platform 6, y=80) | billboard_3 | 220×191 | 694×601 |
 
-Pattern 1,2,long,4,5,3 — no two adjacent platforms share the same image.
+Pattern 1,2,long,4,3 — no two adjacent platforms share the same image. Platform 5 (billboard_5) was removed.
+
+**Hitbox sizing rule:** `h = round(p.w * content_h / content_w)` — matches `drawH` exactly so the collision box wraps the visible billboard on all sides. The `y` position is the top edge of the visible content (where the player lands).
 
 **Implementation:**
 - `BILLBOARD_IMGS` — array of 6 `Image` objects (indices 0–5); billboard_1–5 loaded via loop, long_billboard pushed as index 5
-- `BILLBOARD_PLAT_MAP` — `[0,1,5,3,4,2]` maps floating-platform slot to `BILLBOARD_IMGS` index
+- `BILLBOARD_PLAT_MAP` — `[0,1,5,3,2]` maps floating-platform slot to `BILLBOARD_IMGS` index
 - `drawWorld()` platform loop converted from `for…of` to indexed `for` loop; `pi >= 3` branches to billboard drawing (drawn in 2× world-scale context, so world coords are used directly)
 - Drawing uses the 9-argument `drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh)` to crop transparent padding from the source before scaling.
 - `BILLBOARD_CROP` stores the visible content bounding box for each image (measured via Pillow): billboard_1–5 share `sx=165, sw=694`; long_billboard is `sx=137, sy=81, sw=559, sh=1079`.
