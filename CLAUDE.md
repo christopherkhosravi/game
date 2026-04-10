@@ -29,6 +29,8 @@ game/
 │   ├── countdown_2.png           (countdown sprite, step 2)
 │   ├── countdown_1.png           (countdown sprite, step 1)
 │   ├── countdown_go.png          (countdown sprite, GO!)
+│   ├── kullad/
+│   │   └── 1–193.png             (end-flag sprite animation — chai cup, 640×640 RGBA, black bg removed)
 │   └── transparent/
 │       ├── bounce/      1–4.png    (only 2–3 used in SPRITE_DEFS; frame 1 skipped via firstFrame:2)
 │       ├── dash/        1–3.png    (only 1–2 used in SPRITE_DEFS)
@@ -635,3 +637,16 @@ This ensures the background's top edge is always at or above canvas y=0, regardl
 **Mirror:** Left wall (`pi=1`) uses `dx = p.x + p.w`, `dw = −drawW` (negative width mirrors the image). Right wall (`pi=2`) uses `dx = p.x`, `dw = drawW`. Same sign convention for all three drawImage calls.
 
 **Coverage:** Part 3 bottom ≈ world y 1486, which extends past GROUND_Y=1440 (off-screen below floor). No gap at any camera position between y=−2625 and GROUND_Y.
+
+## Kullad End-Flag Sprite Animation
+
+**Asset:** `animations/kullad/` — 193 RGBA PNGs, 640×640px each. Source: `glowing cup.mp4` (24fps, 640×640, black background). Used as the animated goal/end-flag sprite.
+
+**Background removal method:** Per-pixel threshold against black — no flood fill. Each pixel's max channel value determines alpha:
+- `max(R,G,B) < 25` → fully transparent (handles H.264 compression artifacts on pure black)
+- `25 ≤ max < 70` → linear ramp (soft anti-aliasing edge)
+- `max ≥ 70` → fully opaque
+
+Flood fill was avoided because the dark clay cup body (max channel ~85) would be reachable from the black background via chaining, eating the cup interior.
+
+**Frames:** 193 frames covering one full loop (≈8 seconds at 24fps).
