@@ -437,10 +437,8 @@ function update() {
       const sp = staticPlats[editorSelectedPlat];
       const _shift = keys['ShiftLeft'] || keys['ShiftRight'];
       if (_shift) {
-        if (justPressed['ArrowRight']) sp.w += 1;
-        if (justPressed['ArrowLeft'])  sp.w = Math.max(1, sp.w - 1);
-        if (justPressed['ArrowDown'])  sp.h += 1;
-        if (justPressed['ArrowUp'])    sp.h = Math.max(1, sp.h - 1);
+        if (justPressed['ArrowRight']) { sp.w += 1; sp.h += 1; }
+        if (justPressed['ArrowLeft'])  { sp.w = Math.max(1, sp.w - 1); sp.h = Math.max(1, sp.h - 1); }
       } else {
         if (justPressed['ArrowLeft'])  sp.x -= 1;
         if (justPressed['ArrowRight']) sp.x += 1;
@@ -1755,7 +1753,7 @@ function render() {
     ctx.fillStyle = 'rgba(255,107,157,0.75)';
     const _edLines = [
       'EDITOR: click=place spike  click spike=remove',
-      'click plat=select+drag  arrows=nudge  shift+arrows=scale  E=export',
+      'click plat=select+drag  arrows=nudge  shift+←/→=scale  E=export',
       editorSelectedPlat >= 0
         ? `selected: plat[${editorSelectedPlat}]  ${staticPlats[editorSelectedPlat].w}×${staticPlats[editorSelectedPlat].h}`
         : 'no platform selected',
