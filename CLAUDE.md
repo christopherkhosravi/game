@@ -671,3 +671,38 @@ Flood fill was avoided because the dark clay cup body (max channel ~85) would be
 | 14 | platform 5.png | 134 | -1507 | 190 | 367 | 95 |
 
 **Rendering:** Billboard drawing scales `drawH = p.w * c.sh / c.sw` automatically — no separate rendering changes needed.
+
+## God Mode Level Editor
+
+**What it does:** While god mode is active, an in-game level editor allows placing/removing spike enemies and repositioning platforms without editing source code.
+
+**Activation:** Type `nggyu` during gameplay to toggle god mode (and editor) on/off.
+
+**Spike placement:**
+- Click anywhere on empty world space → places a 51×18 unrotated spike centred on the click point
+- Click on an existing spike → removes it
+- Placed spikes are live enemies: they kill the player on contact
+
+**Platform repositioning (staticPlats indices 3+ only; floor/walls are locked):**
+- Click a platform → selects it (pink dashed highlight around hitbox); platform and billboard visual move together
+- Click and drag a selected platform → freely repositions it
+- Arrow keys while a platform is selected → nudge 1 world unit per press (justPressed, not held)
+- Click empty space → deselects current platform (and places a spike)
+- Arrow keys with no platform selected → normal god mode flight (unchanged)
+
+**Export (E key while god mode active):**
+- Logs two copy-pasteable code blocks to the browser console: `const enemies = [...]` and `const staticPlats = [...]`
+- A "Exported to console" confirmation fades in at the bottom of the canvas for ~2 seconds
+
+**HUD:** Three lines of editor bindings appear top-right below "GOD MODE", showing current selection state. The existing coordinate dot and world-position readout are unchanged.
+
+**Key variables:**
+- `editorSelectedPlat` — index into `staticPlats`; -1 = none selected
+- `_editorDragActive / _editorDragStartCX/CY / _editorDragPlatX0/Y0` — drag state
+- `_editorExportMsg` — countdown frames for the on-screen export confirmation (120 = 2 s)
+
+**Implementation notes:**
+- `_canvasToWorld(clientX, clientY)` converts browser client coords → world units via `canvas.getBoundingClientRect()` + the 2× world scale
+- Arrow key `preventDefault` added in the first keydown listener when `godMode` is true (prevents page scroll)
+- Toggling god mode off resets `editorSelectedPlat` and `_editorDragActive`
+- The platform highlight is drawn inside `drawWorld()`'s 2× scaled context, so `lineWidth:1` = 2 canvas pixels
