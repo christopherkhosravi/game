@@ -729,21 +729,21 @@ where `sign_src_rows = sign_bottom_row + 1` (number of source rows from crop top
 
 | pi | Image | sw | sign_src_rows | p.w | p.h |
 |----|-------|----|---------------|-----|-----|
-| 3  | platform 4.png   | 559 | 873 | 140 | 219 |
-| 4  | Platform 8.png   | 906 | 592 | 464 | 303 |
-| 5  | billboard_1.png  | 694 | 328 | 120 |  57 |
-| 6  | platform 2.png   | 559 | 874 | 276 | 432 |
-| 7  | platform 6.png   | 815 | 459 | 280 | 158 |
-| 8  | Platform 9.png   | 906 | 592 | 330 | 216 |
-| 9  | long_billboard   | 559 | 873 | 201 | 314 |
-| 10 | billboard_4.png  | 694 | 328 | 172 |  81 |
-| 11 | Platform 3.png   | 559 | 874 | 260 | 407 |
-| 12 | Platform 10.png  | 901 | 492 | 488 | 266 |
-| 13 | billboard_2.png  | 694 | 329 | 187 |  89 |
-| 14 | platform 1.png   | 560 | 874 | 150 | 234 |
-| 15 | billboard_3.png  | 694 | 328 | 150 |  71 |
-| 16 | Platform 11.png  | 898 | 594 | 350 | 232 |
-| 17 | platform 5.png   | 559 | 874 | 190 | 297 |
-| 18 | billboard_5.png  | 694 | 329 | 200 |  95 |
+| 3  | platform 4.png   | 559 | 873 | 140 | 195 |
+| 4  | Platform 8.png   | 906 | 592 | 464 | 309 |
+| 5  | billboard_1.png  | 694 | 328 | 120 |  35 |
+| 6  | platform 2.png   | 559 | 874 | 276 | 385 |
+| 7  | platform 6.png   | 815 | 459 | 280 | 131 |
+| 8  | Platform 9.png   | 906 | 592 | 330 | 221 |
+| 9  | long_billboard   | 559 | 873 | 201 | 279 |
+| 10 | billboard_4.png  | 694 | 328 | 172 |  49 |
+| 11 | Platform 3.png   | 559 | 874 | 260 | 362 |
+| 12 | Platform 10.png  | 901 | 492 | 488 | 219 |
+| 13 | billboard_2.png  | 694 | 329 | 187 |  55 |
+| 14 | platform 1.png   | 560 | 874 | 150 | 208 |
+| 15 | billboard_3.png  | 694 | 328 | 150 |  43 |
+| 16 | Platform 11.png  | 898 | 594 | 350 | 238 |
+| 17 | platform 5.png   | 559 | 874 | 190 | 264 |
+| 18 | billboard_5.png  | 694 | 329 | 200 |  58 |
 
 **No other properties changed** — x, y, w, and type are all identical to before.
