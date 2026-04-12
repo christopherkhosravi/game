@@ -644,24 +644,30 @@ Flood fill was avoided because the dark clay cup body (max channel ~85) would be
 
 **Frames:** 193 frames covering one full loop (≈8 seconds at 24fps).
 
-## 10 New Billboard Platform Scale-Up
+## 10 New Billboard Platform Scale-Up (2× Greedy Layout)
 
 **Character width unit:** 12 world units (player `w:12`). **5 character widths** = 60 world units.
 **Wall clearance rule:** platform x ≥ 76 (left wall right edge 16 + 60); platform right edge ≤ 764 (right wall left edge 824 − 60).
 
-**What changed:** All 10 new billboard platforms (slots 0,1,3,4,5,8,9,11,13,14 — the platforms using platform 1–6, 8–11 PNGs) had their hitbox `w` and `h` tripled in `staticPlats`. Horizontal position was adjusted where the new right edge exceeded 764 or the x was below 76. Vertical positions (y) were not changed. The 6 original billboard platforms (billboard_1–5, long_billboard at slots 2,6,7,10,12,15) were not touched.
+**Sizing rule:** `new_w = 2 × original_1× visible content width` (measured via Pillow `getbbox()`); `new_h = round(new_w × sh/sw)`. Original 1× w values (pre-scaling): platform4=70, Platform8=190, platform2=85, platform6=140, Platform9=165, Platform3=80, Platform10=210, platform1=75, Platform11=175, platform5=95.
 
-| Slot | Image | Old x,w,h | New x,w,h | Note |
-|------|-------|-----------|-----------|------|
-| 0 | platform 4.png | x:724,w:70,h:120 | x:554,w:210,h:360 | moved left (right edge would have exceeded 764) |
-| 1 | Platform 8.png | x:36,w:190,h:140 | x:76,w:570,h:420 | moved right (was within 5 chars of left wall) |
-| 3 | platform 2.png | x:41,w:85,h:146 | x:76,w:255,h:438 | moved right (was within 5 chars of left wall) |
-| 4 | platform 6.png | x:350,w:140,h:106 | x:344,w:420,h:318 | moved left slightly (right edge would have exceeded 764) |
-| 5 | Platform 9.png | x:634,w:165,h:122 | x:269,w:495,h:366 | moved left (right edge would have exceeded 764) |
-| 8 | Platform 3.png | x:380,w:80,h:138 | x:380,w:240,h:414 | no position change (within bounds) |
-| 9 | Platform 10.png | x:589,w:210,h:162 | x:134,w:630,h:486 | moved left (right edge would have exceeded 764) |
-| 11 | platform 1.png | x:46,w:75,h:129 | x:76,w:225,h:387 | moved right (was within 5 chars of left wall) |
-| 13 | Platform 11.png | x:624,w:175,h:130 | x:239,w:525,h:390 | moved left (right edge would have exceeded 764) |
-| 14 | platform 5.png | x:41,w:95,h:163 | x:76,w:285,h:489 | moved right (was within 5 chars of left wall) |
+**Placement algorithm:** Greedy largest-first. Sort the 10 platforms by world area (w×h) descending. For each platform scan candidate (x, y) positions across the full level space (Y_MAX=1000 down to Y_MIN=−2550, x constrained by wall clearance), score = minimum Euclidean distance to all already-placed obstacles (walls, floor, and previously placed platforms). Place at the highest-scoring position that has no overlaps. Obstacles include the 6 locked original platforms. After placement, add to obstacle list.
+
+**The 6 locked original platforms (not touched):** slots 2 (billboard_1), 6 (long_billboard), 7 (billboard_4), 10 (billboard_2), 12 (billboard_3), 15 (billboard_5).
+
+**Final layout (10 new platforms):**
+
+| Slot | Image | x | y | w | h | 1× orig w |
+|------|-------|---|---|---|---|-----------|
+| 0 | platform 4.png | 144 | 600 | 140 | 270 | 70 |
+| 1 | Platform 8.png | 228 | 980 | 380 | 280 | 190 |
+| 3 | platform 2.png | 124 | -2188 | 170 | 328 | 85 |
+| 4 | platform 6.png | 331 | -602 | 280 | 212 | 140 |
+| 5 | Platform 9.png | 316 | -243 | 330 | 243 | 165 |
+| 8 | Platform 3.png | 542 | -2169 | 160 | 309 | 80 |
+| 9 | Platform 10.png | 208 | 186 | 420 | 324 | 210 |
+| 11 | platform 1.png | 423 | -1399 | 150 | 289 | 75 |
+| 13 | Platform 11.png | 252 | -1011 | 350 | 261 | 175 |
+| 14 | platform 5.png | 134 | -1507 | 190 | 367 | 95 |
 
 **Rendering:** Billboard drawing scales `drawH = p.w * c.sh / c.sw` automatically — no separate rendering changes needed.
