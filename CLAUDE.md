@@ -707,3 +707,26 @@ Flood fill was avoided because the dark clay cup body (max channel ~85) would be
 - Arrow key `preventDefault` added in the first keydown listener when `godMode` is true (prevents page scroll)
 - Toggling god mode off resets `editorSelectedPlat` and `_editorDragActive`
 - The platform highlight is drawn inside `drawWorld()`'s 2× scaled context, so `lineWidth:1` = 2 canvas pixels
+
+## Platform Hitbox Bottom-Edge Alignment
+
+**Problem:** 8 floating platform hitboxes had `h` values that didn't match the bottom of their visible billboard artwork. The top, left, and right edges were correct; only the bottom edge was wrong.
+
+**Formula:** Correct `h = round(p.w * crop.sh / crop.sw)` — the same ratio used by `drawWorld()` to compute `drawH`. When `p.h != drawH`, the hitbox bottom edge floats above or sinks below the artwork bottom.
+
+**Fixed platforms (only `h` changed):**
+
+| pi | Image | Old h | New h | Error |
+|----|-------|-------|-------|-------|
+| 4  | Platform 8.png  | 364 | 342 | hitbox was 22 too tall |
+| 6  | platform 2.png  | 434 | 533 | hitbox was 99 too short |
+| 9  | long_billboard  | 266 | 388 | hitbox was 122 too short |
+| 10 | billboard_4     | 159 | 149 | hitbox was 10 too tall |
+| 11 | Platform 3.png  | 409 | 502 | hitbox was 93 too short |
+| 12 | Platform 10.png | 392 | 385 | hitbox was 7 too tall |
+| 13 | billboard_2     | 170 | 162 | hitbox was 8 too tall |
+| 18 | billboard_5     | 184 | 173 | hitbox was 11 too tall |
+
+**Already correct (not touched):** pi=3,5,7,8,14,15,16,17.
+
+**No other properties changed** — x, y, w, and type are all identical to before.
