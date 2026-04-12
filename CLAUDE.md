@@ -643,3 +643,25 @@ This ensures the background's top edge is always at or above canvas y=0, regardl
 Flood fill was avoided because the dark clay cup body (max channel ~85) would be reachable from the black background via chaining, eating the cup interior.
 
 **Frames:** 193 frames covering one full loop (≈8 seconds at 24fps).
+
+## 10 New Billboard Platform Scale-Up
+
+**Character width unit:** 12 world units (player `w:12`). **5 character widths** = 60 world units.
+**Wall clearance rule:** platform x ≥ 76 (left wall right edge 16 + 60); platform right edge ≤ 764 (right wall left edge 824 − 60).
+
+**What changed:** All 10 new billboard platforms (slots 0,1,3,4,5,8,9,11,13,14 — the platforms using platform 1–6, 8–11 PNGs) had their hitbox `w` and `h` tripled in `staticPlats`. Horizontal position was adjusted where the new right edge exceeded 764 or the x was below 76. Vertical positions (y) were not changed. The 6 original billboard platforms (billboard_1–5, long_billboard at slots 2,6,7,10,12,15) were not touched.
+
+| Slot | Image | Old x,w,h | New x,w,h | Note |
+|------|-------|-----------|-----------|------|
+| 0 | platform 4.png | x:724,w:70,h:120 | x:554,w:210,h:360 | moved left (right edge would have exceeded 764) |
+| 1 | Platform 8.png | x:36,w:190,h:140 | x:76,w:570,h:420 | moved right (was within 5 chars of left wall) |
+| 3 | platform 2.png | x:41,w:85,h:146 | x:76,w:255,h:438 | moved right (was within 5 chars of left wall) |
+| 4 | platform 6.png | x:350,w:140,h:106 | x:344,w:420,h:318 | moved left slightly (right edge would have exceeded 764) |
+| 5 | Platform 9.png | x:634,w:165,h:122 | x:269,w:495,h:366 | moved left (right edge would have exceeded 764) |
+| 8 | Platform 3.png | x:380,w:80,h:138 | x:380,w:240,h:414 | no position change (within bounds) |
+| 9 | Platform 10.png | x:589,w:210,h:162 | x:134,w:630,h:486 | moved left (right edge would have exceeded 764) |
+| 11 | platform 1.png | x:46,w:75,h:129 | x:76,w:225,h:387 | moved right (was within 5 chars of left wall) |
+| 13 | Platform 11.png | x:624,w:175,h:130 | x:239,w:525,h:390 | moved left (right edge would have exceeded 764) |
+| 14 | platform 5.png | x:41,w:95,h:163 | x:76,w:285,h:489 | moved right (was within 5 chars of left wall) |
+
+**Rendering:** Billboard drawing scales `drawH = p.w * c.sh / c.sw` automatically — no separate rendering changes needed.
