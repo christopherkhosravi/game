@@ -147,12 +147,22 @@ const staticPlats = [
   {x:226,    y:GROUND_Y, w:388,   h:20,  type:'solid'}, // floor — half-size w=388 h=20, centred: x=(LW-388)/2=226
   {x:0,      y:LH-4180,  w:16,   h:4180, type:'solid'}, // left wall  — tripled play space (was h:1420); top at y=-2700
   {x:LW-16,  y:LH-4180,  w:16,   h:4180, type:'solid'}, // right wall — same
-  {x:80,     y:865,      w:120, h:104,  type:'solid'}, // platform 1 (lower) — moved from y=1000
-  {x:560,    y:770,      w:120, h:104,  type:'solid'}, // platform 2 (upper)
-  {x:130,    y:220,      w:270, h:423,  type:'solid'}, // platform 3 — left; moved from y=570 to y=220, x=90→130
-  {x:560,    y:390,      w:130, h:113,  type:'solid'}, // platform 4 — right, wall-jump + bounce reach
-  // platform 5 (x:90, y:220, w:130, h:16, type:'pass', billboard_5) — REMOVED; recorded in CLAUDE.md
-  {x:300,    y:80,       w:220, h:191,  type:'solid'}, // platform 6 — top, wide landing pad for goal
+  {x:724,  y:1220,  w:70,  h:120, type:'solid'}, // slot 0:  platform 4.png   — R  (portrait frame_h=962)
+  {x:36,   y:960,   w:190, h:140, type:'solid'}, // slot 1:  Platform 8.png   — L
+  {x:674,  y:700,   w:120, h:104, type:'solid'}, // slot 2:  billboard_1      — R
+  {x:41,   y:440,   w:85,  h:146, type:'solid'}, // slot 3:  platform 2.png   — L  (portrait frame_h=962)
+  {x:350,  y:180,   w:140, h:106, type:'solid'}, // slot 4:  platform 6.png   — C
+  {x:634,  y:-80,   w:165, h:122, type:'solid'}, // slot 5:  Platform 9.png   — R
+  {x:46,   y:-340,  w:90,  h:155, type:'solid'}, // slot 6:  long_billboard   — L  (portrait frame_h=962)
+  {x:36,   y:-590,  w:100, h:87,  type:'solid'}, // slot 7:  billboard_4      — L
+  {x:380,  y:-840,  w:80,  h:138, type:'solid'}, // slot 8:  Platform 3.png   — C  (portrait frame_h=963)
+  {x:589,  y:-1080, w:210, h:120, type:'solid'}, // slot 9:  Platform 10.png  — R
+  {x:669,  y:-1310, w:130, h:113, type:'solid'}, // slot 10: billboard_2      — R
+  {x:46,   y:-1530, w:75,  h:129, type:'solid'}, // slot 11: platform 1.png   — L  (portrait frame_h=963)
+  {x:345,  y:-1750, w:150, h:130, type:'solid'}, // slot 12: billboard_3      — C
+  {x:624,  y:-1970, w:175, h:130, type:'solid'}, // slot 13: Platform 11.png  — R
+  {x:41,   y:-2180, w:95,  h:163, type:'solid'}, // slot 14: platform 5.png   — L  (portrait frame_h=962)
+  {x:360,  y:-2380, w:120, h:104, type:'solid'}, // slot 15: billboard_5      — C
 ];
 
 // moving platforms {x,y,w,h, ox,oy, dx,dy, range, t}
@@ -174,7 +184,7 @@ const enemies = [
 ];
 
 // goal
-const GOAL = {x:370, y:20, w:24, h:60}; // top of world — base sits on platform 6 (y:80)
+const GOAL = {x:408, y:-2580, w:24, h:60}; // top of world — centred on canvas (LW/2-12=408)
 
 // quake radius (pushback on enemies)
 const QUAKE_RADIUS = 80;
@@ -819,30 +829,48 @@ function startBgFramePreload() {
   bgFrameIndex = 0;
 }
 
-// Billboard images — one per floating platform (staticPlats indices 3–8)
+// Billboard images — one per floating platform (staticPlats indices 3–18)
 const BILLBOARD_IMGS = [];
 (function() {
   for (let i = 1; i <= 5; i++) {
     const img = new Image();
     img.src = `animations/billboard_${i}.png`;
-    BILLBOARD_IMGS.push(img);
+    BILLBOARD_IMGS.push(img); // indices 0–4
   }
   const lb = new Image();
   lb.src = 'animations/long_billboard.png';
   BILLBOARD_IMGS.push(lb); // index 5
+  const newFiles = [
+    'platform 1.png', 'platform 2.png', 'Platform 3.png', 'platform 4.png',
+    'platform 5.png', 'platform 6.png', 'Platform 8.png', 'Platform 9.png',
+    'Platform 10.png', 'Platform 11.png'
+  ];
+  for (const f of newFiles) {
+    const img = new Image();
+    img.src = `animations/${f}`;
+    BILLBOARD_IMGS.push(img); // indices 6–15
+  }
 })();
-// Map floating-platform slot (0–5) to BILLBOARD_IMGS index (0–5)
-// Pattern 1,2,long,4,5,3 — no two adjacent platforms share the same image
-const BILLBOARD_PLAT_MAP = [0, 1, 5, 3, 2]; // slot 4 was billboard_5 (platform 5 removed)
+// Map floating-platform slot (0–15) to BILLBOARD_IMGS index (0–15)
+const BILLBOARD_PLAT_MAP = [9, 12, 0, 7, 11, 13, 5, 3, 8, 14, 1, 6, 2, 15, 10, 4];
 // Visible content bounding box per billboard (px, measured from transparent edges via Pillow)
-// { sx, sy, sw, sh } = source crop rect
 const BILLBOARD_CROP = [
-  {sx:165, sy:225, sw:694, sh:601}, // billboard_1   (1024×1024)
-  {sx:165, sy:224, sw:694, sh:602}, // billboard_2   (1024×1024)
-  {sx:165, sy:225, sw:694, sh:601}, // billboard_3   (1024×1024)
-  {sx:165, sy:225, sw:694, sh:601}, // billboard_4   (1024×1024)
-  {sx:165, sy:224, sw:694, sh:602}, // billboard_5   (1024×1024)
-  {sx:137, sy:81,  sw:559, sh:1079}, // long_billboard (832×1248; frame+mechanism; frame ends ~y=955)
+  {sx:165, sy:225, sw:694, sh:601},  // 0:  billboard_1    (1024×1024)
+  {sx:165, sy:224, sw:694, sh:602},  // 1:  billboard_2    (1024×1024)
+  {sx:165, sy:225, sw:694, sh:601},  // 2:  billboard_3    (1024×1024)
+  {sx:165, sy:225, sw:694, sh:601},  // 3:  billboard_4    (1024×1024)
+  {sx:165, sy:224, sw:694, sh:602},  // 4:  billboard_5    (1024×1024)
+  {sx:137, sy:81,  sw:559, sh:1079}, // 5:  long_billboard (832×1248)
+  {sx:136, sy:80,  sw:560, sh:1080}, // 6:  platform 1.png (832×1248)
+  {sx:137, sy:81,  sw:559, sh:1079}, // 7:  platform 2.png (832×1248)
+  {sx:137, sy:80,  sw:559, sh:1080}, // 8:  Platform 3.png (832×1248)
+  {sx:137, sy:81,  sw:559, sh:1079}, // 9:  platform 4.png (832×1248)
+  {sx:137, sy:81,  sw:559, sh:1079}, // 10: platform 5.png (832×1248)
+  {sx:110, sy:353, sw:815, sh:618},  // 11: platform 6.png (1024×1024)
+  {sx:218, sy:55,  sw:906, sh:668},  // 12: Platform 8.png (1344×768)
+  {sx:218, sy:55,  sw:906, sh:668},  // 13: Platform 9.png (1344×768)
+  {sx:0,   sy:0,   sw:1344,sh:768},  // 14: Platform 10.png (1344×768)
+  {sx:216, sy:53,  sw:898, sh:669},  // 15: Platform 11.png (1344×768)
 ];
 
 // Kullad end-flag animation — 193 RGBA PNGs extracted from glowing cup.mp4
