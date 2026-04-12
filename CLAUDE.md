@@ -687,6 +687,7 @@ Flood fill was avoided because the dark clay cup body (max channel ~85) would be
 - Click a platform → selects it (pink dashed highlight around hitbox); platform and billboard visual move together
 - Click and drag a selected platform → freely repositions it
 - Arrow keys while a platform is selected → nudge 1 world unit per press (justPressed, not held)
+- Shift+Arrow keys while a platform is selected → scale: Left/Right changes width, Up/Down changes height (min 1); current w×h shown in HUD
 - Click empty space → deselects current platform (and places a spike)
 - Arrow keys with no platform selected → normal god mode flight (unchanged)
 
