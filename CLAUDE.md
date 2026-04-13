@@ -245,14 +245,22 @@ The stopwatch timer text is `88px "Courier New"`, displayed at `(CW/2, 24)` with
 - Aspect ratio preserved: dW/dH = 704/1280 = 0.55
 - Scroll and parallax logic unchanged
 
-## Control Remapping — WASD Only, Double-Tap Dash
+## Control Remapping — WASD + Arrows, Double-Tap or Q/E Dash, Space/W/Up Jump
 
-**What changed:**
-- Arrow keys removed from all `press()`/`jp()`/`jr()` calls — WASD is the sole movement input.
-- Q and E dash bindings removed.
-- Dash is now triggered by double-tapping A (dash left) or D (dash right) within a 250 ms window.
-- `e.preventDefault()` narrowed from all arrow keys + Space to Space only.
-- Title screen overlay and bottom controls bar updated to reflect new bindings.
+**Current bindings:**
+- **Move left/right:** A/D or ArrowLeft/ArrowRight (both work simultaneously)
+- **Jump:** W, ArrowUp, or Space — all three trigger jump, bounce, and wall-jump
+- **Dash left:** double-tap A (within 250 ms) or Q
+- **Dash right:** double-tap D (within 250 ms) or E
+- **Float:** S (air toggle)
+- **Restart:** R
+
+**Implementation:**
+- `left = press(['KeyA','ArrowLeft'])`, `right = press(['KeyD','ArrowRight'])`
+- `jumpP/jumpH/jumpR` all include `'Space','KeyW','ArrowUp'`
+- Keydown listener injects `justPressed['DashLeft']` on `KeyQ` and `justPressed['DashRight']` on `KeyE` (same path as double-tap A/D)
+- `e.preventDefault()` applied to all four arrow keys unconditionally (prevents page scroll)
+- Note: `KeyE` still triggers god-mode export — the `justPressed['DashRight']` injection doesn't conflict because god mode returns before the dash block
 
 **Implementation:** Two module-level variables `_lastAPress` and `_lastDPress` (timestamps, ms) are declared alongside `justPressed`/`justReleased`. The first `keydown` listener checks `performance.now() - _lastXPress < 250` on the leading edge of each KeyA/KeyD press (guarded by `!keys[e.code]` so held keys don't retrigger). On a qualifying double-tap it injects a virtual key `'DashLeft'` or `'DashRight'` into `justPressed`, which the existing `dashQP`/`dashEP` variables consume via `jp(['DashLeft'])` / `jp(['DashRight'])`. The dash activation and physics block are otherwise unchanged.
 
