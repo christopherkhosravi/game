@@ -293,6 +293,30 @@ The stopwatch timer text is `88px "Courier New"`, displayed at `(CW/2, 24)` with
 
 All four effects live in a single `if (p.wallContact)` block inserted after wall direction is resolved and before `p.prevWallContact` is updated.
 
+## Loading Screen
+
+**What it does:** Shows a full-canvas loading screen before the title screen appears. The overlay is hidden (opacity:0) until all assets load, then a 500ms canvas fade to black transitions into the title screen.
+
+**Tracked assets (249 images + 3 videos = 252 total):**
+- 10 background frames (`bgFrames`)
+- 16 billboard/platform images (`BILLBOARD_IMGS`)
+- 1 building image (`BUILDING_IMG`), 1 spikes image (`SPIKES_IMG`)
+- 4 countdown images (`COUNTDOWN_IMGS`)
+- 193 kullad frames (`KULLAD_IMGS`)
+- 21 sprite frames (`SPRITE_IMGS` flattened)
+- 3 cutscene videos (`cutsceneVid1–3`, tracked via `canplaythrough`)
+
+**Key variables (GAME STATE section):**
+- `_loadTracker` — `{done, total}` object; `done` is a closure over the counter incremented by load/error listeners
+- `_loadScreenDone` — true once completion is first detected
+- `_loadFadeStart` — `performance.now()` when fade began
+
+**`drawLoadingScreen()` (RENDER section):** Draws title, subtitle, progress bar, and percentage in the neon/cyberpunk palette. On completion detection sets `_loadScreenDone = true`, then fades canvas to black over 500ms. At fade end: sets `gameState = 'title'`, sets overlay `opacity:1` (CSS transition reveals it).
+
+**Background-tab fallback:** `requestAnimationFrame` pauses when a tab is hidden. A `setInterval` polling at 250ms runs alongside the rAF loop. When all assets are loaded it clears itself and schedules the state transition via `setTimeout(520ms)` — same timing as the canvas fade.
+
+**`gameState` lifecycle:** `'loading'` (initial) → `'title'` (after fade). The overlay starts with inline `opacity:0; pointer-events:none; transition:opacity 0.5s` applied immediately when the GAME STATE section runs.
+
 ## Dash Ground Alignment Fix
 
 The `groundStates` array in `drawHnov()` controls which states receive a `+8 px` downward draw offset to compensate for transparent padding at the bottom of sprite PNGs. `'dash'` was missing from this list, causing the sprite to float 8 px above the ground during a ground dash. Adding `'dash'` to `groundStates` applies the same compensation as idle and run.

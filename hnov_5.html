@@ -421,7 +421,13 @@ function resolveX(px, py, pw, ph, vx) {
 }
 
 // ─── GAME STATE ───────────────────────────────────────────────────────────────
-let gameState = 'title';
+let gameState = 'loading';
+// — loading screen —
+let _loadTracker = null;
+let _loadScreenDone = false;
+let _loadFadeStart = 0;
+// Hide overlay until loading completes; CSS transition will reveal it
+(function(){ const ov = document.getElementById('overlay'); ov.style.opacity='0'; ov.style.pointerEvents='none'; ov.style.transition='opacity 0.5s'; })();
 let frame = 0;
 let winTimer = 0;
 let deathTimer = 0;
@@ -1790,8 +1796,62 @@ function drawCutsceneSubtitle(text) {
 }
 
 // ─── RENDER ──────────────────────────────────────────────────────────────────
+function drawLoadingScreen() {
+  const prog = _loadTracker ? Math.min(1, _loadTracker.done / _loadTracker.total) : 0;
+  ctx.fillStyle = '#0a0a14';
+  ctx.fillRect(0, 0, CW, CH);
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  // title
+  ctx.shadowColor = '#ff6b9d';
+  ctx.shadowBlur = 48;
+  ctx.fillStyle = '#e8d8ff';
+  ctx.font = 'bold 128px "Courier New"';
+  ctx.fillText('HNOV', CW / 2, CH / 2 - 90);
+  ctx.shadowBlur = 18;
+  ctx.fillStyle = '#6a5acd';
+  ctx.font = '15px "Courier New"';
+  ctx.fillText('a  m o v e m e n t  s t o r y', CW / 2, CH / 2 - 24);
+  ctx.shadowBlur = 0;
+  // progress bar track
+  const barW = 480, barH = 3;
+  const barX = CW / 2 - barW / 2, barY = CH / 2 + 40;
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(barX, barY, barW, barH);
+  // progress bar fill
+  ctx.shadowColor = '#b09aef';
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = '#6a5acd';
+  ctx.fillRect(barX, barY, barW * prog, barH);
+  ctx.shadowBlur = 0;
+  // percentage label
+  ctx.fillStyle = '#3a2a6e';
+  ctx.font = '12px "Courier New"';
+  ctx.fillText('LOADING  ' + Math.floor(prog * 100) + '%', CW / 2, barY + 22);
+  ctx.restore();
+  drawScanlines();
+  // fade-out overlay when done
+  if (_loadTracker && _loadTracker.done >= _loadTracker.total && !_loadScreenDone) {
+    _loadScreenDone = true;
+    _loadFadeStart = performance.now();
+  }
+  if (_loadScreenDone) {
+    const t = Math.min(1, (performance.now() - _loadFadeStart) / 500);
+    ctx.fillStyle = 'rgba(10,10,20,' + t + ')';
+    ctx.fillRect(0, 0, CW, CH);
+    if (t >= 1) {
+      gameState = 'title';
+      const ov = document.getElementById('overlay');
+      ov.style.opacity = '1';
+      ov.style.pointerEvents = '';
+    }
+  }
+}
+
 function render() {
   ctx.clearRect(0,0,CW,CH);
+  if (gameState === 'loading') { drawLoadingScreen(); return; }
   if (gameState === 'cutscene') { drawCutscene(); return; }
   if (gameState === 'dead') ctx.filter = 'blur(6px)';
   drawBackground();
@@ -2033,6 +2093,53 @@ window.submitScore = async function(name, time_ms) {
 };
 
 startBgFramePreload();
+
+// ─── LOADING TRACKER ─────────────────────────────────────────────────────────
+(function() {
+  const imgs = [
+    ...bgFrames,
+    ...BILLBOARD_IMGS,
+    BUILDING_IMG, SPIKES_IMG,
+    ...Object.values(COUNTDOWN_IMGS),
+    ...KULLAD_IMGS,
+    ...Object.values(SPRITE_IMGS).flat()
+  ];
+  const vids = ['cutsceneVid1','cutsceneVid2','cutsceneVid3']
+    .map(id => document.getElementById(id));
+  const total = imgs.length + vids.length;
+  let done = 0;
+  const inc = () => { done++; };
+  for (const img of imgs) {
+    if (img.complete && img.naturalWidth > 0) { done++; }
+    else { img.addEventListener('load', inc); img.addEventListener('error', inc); }
+  }
+  for (const vid of vids) {
+    if (vid.readyState >= 3) { done++; }
+    else {
+      vid.addEventListener('canplaythrough', inc, {once:true});
+      vid.addEventListener('error', inc, {once:true});
+    }
+  }
+  _loadTracker = { get done() { return done; }, total };
+  // Fallback: rAF pauses in background tabs; poll every 250ms and fire the
+  // transition directly so opening in a background tab still works.
+  const _pollId = setInterval(() => {
+    if (done < total) return;
+    clearInterval(_pollId);
+    if (_loadScreenDone) return;
+    _loadScreenDone = true;
+    _loadFadeStart = performance.now();
+    setTimeout(() => {
+      if (gameState === 'loading') {
+        gameState = 'title';
+        const ov = document.getElementById('overlay');
+        ov.style.opacity = '1';
+        ov.style.pointerEvents = '';
+      }
+    }, 520);
+  }, 250);
+})();
+
 loop();
 </script>
 </body>
