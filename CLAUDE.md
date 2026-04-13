@@ -252,7 +252,7 @@ The stopwatch timer text is `88px "Courier New"`, displayed at `(CW/2, 24)` with
 - **Jump:** W, ArrowUp, or Space — all three trigger jump, bounce, and wall-jump
 - **Dash left:** double-tap A or ArrowLeft (within 250 ms) or Q
 - **Dash right:** double-tap D or ArrowRight (within 250 ms) or E
-- **Float:** S (air toggle)
+- **Float:** S or ArrowDown (air toggle)
 - **Restart:** R
 
 **Implementation:**
