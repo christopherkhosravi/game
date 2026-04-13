@@ -284,6 +284,15 @@ The stopwatch timer text is `88px "Courier New"`, displayed at `(CW/2, 24)` with
 - R-key `startGame()` path is guarded with `&& !player.dead` to prevent interrupting the death animation.
 - In `render()`, `ctx.filter = 'blur(6px)'` is set before background/world draws and reset to `'none'` after; then `drawDead()` draws the panel; then `drawHnov()` is called a second time (with the 2× scale + camera translate from `ctx.save()`) to place the player sprite above and unblurred.
 
+## Dash / Jump / Float / Wall Interaction Rules
+
+- **Jump during/after dash is always responsive:** The normal jump condition accepts `dashGrace > 0` as a substitute for `coyote > 0`, so the jump window stays open for the full dash grace period. When a jump fires with `dashTimer > 0`, the dash is immediately cancelled (`dashTimer = 0`) so the `p.vy = 0` line in the dash continuation block can't override the jump velocity on subsequent ticks.
+- **Wall grab cancels dash:** On any frame where `p.wallContact` becomes true and `dashTimer > 0`, `dashTimer` is zeroed. The dash ends the instant the player touches a wall.
+- **Wall grab cancels float:** `p.floating` is set to false whenever `p.wallContact` is true.
+- **Wall grab restores double-jump:** On the first frame of fresh wall contact (`wallContact && !prevWallContact`), `p.jumpCount` is reset to 0, giving the player a full jump + bounce again — same as landing on the ground.
+
+All four effects live in a single `if (p.wallContact)` block inserted after wall direction is resolved and before `p.prevWallContact` is updated.
+
 ## Dash Ground Alignment Fix
 
 The `groundStates` array in `drawHnov()` controls which states receive a `+8 px` downward draw offset to compensate for transparent padding at the bottom of sprite PNGs. `'dash'` was missing from this list, causing the sprite to float 8 px above the ground during a ground dash. Adding `'dash'` to `groundStates` applies the same compensation as idle and run.

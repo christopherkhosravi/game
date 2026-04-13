@@ -653,6 +653,12 @@ function update() {
     p.wallDir = 0;
   }
 
+  if (p.wallContact) {
+    if (p.dashTimer > 0) p.dashTimer = 0;      // cancel dash on wall grab
+    p.floating = false;                          // cancel float on wall grab
+    if (!p.prevWallContact) p.jumpCount = 0;    // restore double-jump on fresh wall contact
+  }
+
   p.prevWallContact = p.wallContact;
 
   // — wall jump —
@@ -664,7 +670,8 @@ function update() {
     spawnParticles(p.x + (p.wallDir > 0 ? p.w : 0), p.y+p.h/2, P.dashFx, 8, 5, 5, 14);
   }
   // — normal jump —
-  else if (p.jumpBuf > 0 && p.coyote > 0 && !p.wallContact) {
+  else if (p.jumpBuf > 0 && (p.coyote > 0 || p.dashGrace > 0) && !p.wallContact) {
+    p.dashTimer = 0;
     p.vy = JUMP_FORCE;
     p.coyote = 0; p.jumpBuf = 0;
     p.floating = false;
