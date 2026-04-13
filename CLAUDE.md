@@ -250,14 +250,15 @@ The stopwatch timer text is `88px "Courier New"`, displayed at `(CW/2, 24)` with
 **Current bindings:**
 - **Move left/right:** A/D or ArrowLeft/ArrowRight (both work simultaneously)
 - **Jump:** W, ArrowUp, or Space — all three trigger jump, bounce, and wall-jump
-- **Dash left:** double-tap A (within 250 ms) or Q
-- **Dash right:** double-tap D (within 250 ms) or E
+- **Dash left:** double-tap A or ArrowLeft (within 250 ms) or Q
+- **Dash right:** double-tap D or ArrowRight (within 250 ms) or E
 - **Float:** S (air toggle)
 - **Restart:** R
 
 **Implementation:**
 - `left = press(['KeyA','ArrowLeft'])`, `right = press(['KeyD','ArrowRight'])`
 - `jumpP/jumpH/jumpR` all include `'Space','KeyW','ArrowUp'`
+- Keydown listener: double-tap ArrowLeft/ArrowRight (250 ms window) injects `DashLeft`/`DashRight`, same as A/D double-tap; `_lastLeftPress`/`_lastRightPress` track timestamps
 - Keydown listener injects `justPressed['DashLeft']` on `KeyQ` and `justPressed['DashRight']` on `KeyE` (same path as double-tap A/D)
 - `e.preventDefault()` applied to all four arrow keys unconditionally (prevents page scroll)
 - Note: `KeyE` still triggers god-mode export — the `justPressed['DashRight']` injection doesn't conflict because god mode returns before the dash block

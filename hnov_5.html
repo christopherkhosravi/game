@@ -321,7 +321,7 @@ function spawnParticles(x, y, color, count, vxRange, vyRange, life) {
 const keys = {};
 const justPressed = {};
 const justReleased = {};
-let _lastAPress = 0, _lastDPress = 0;
+let _lastAPress = 0, _lastDPress = 0, _lastLeftPress = 0, _lastRightPress = 0;
 document.addEventListener('keydown', e => {
   if (!keys[e.code]) {
     justPressed[e.code] = true;
@@ -333,6 +333,14 @@ document.addEventListener('keydown', e => {
     if (e.code === 'KeyD') {
       if (now - _lastDPress < 250) justPressed['DashRight'] = true;
       _lastDPress = now;
+    }
+    if (e.code === 'ArrowLeft') {
+      if (now - _lastLeftPress < 250) justPressed['DashLeft'] = true;
+      _lastLeftPress = now;
+    }
+    if (e.code === 'ArrowRight') {
+      if (now - _lastRightPress < 250) justPressed['DashRight'] = true;
+      _lastRightPress = now;
     }
     if (e.code === 'KeyQ') justPressed['DashLeft'] = true;
     if (e.code === 'KeyE') justPressed['DashRight'] = true;
