@@ -811,11 +811,15 @@ function update() {
   // — hazard & enemy collision —
   checkHazards();
 
-  // — boss trigger —
+  // — boss trigger (first time: play intro cutscene) —
   if (!bossTriggered && !bossDefeated && !player.dead && player.y < BOSS_TRIGGER_Y) {
     bossTriggered = true;
     beginBossCutscene(1);
     return;
+  }
+  // — boss re-activate (after player death: no cutscene, just resume fight) —
+  if (bossTriggered && !bossDefeated && !bossActive && !player.dead && player.y < BOSS_TRIGGER_Y) {
+    bossActive = true; resetBoss();
   }
   // — boss update —
   if (bossActive && !player.dead) updateBoss();
@@ -1025,8 +1029,8 @@ function respawn() {
   if (_customRespawn !== null) { player.x = _customRespawn.x; player.y = _customRespawn.y; }
   spawnParticles(old.x+old.w/2, old.y+old.h/2, P.h5, 16, 8, 8, 24);
   screenShake = 6;
-  // reset boss if fight was in progress
-  if (bossTriggered && !bossDefeated) { bossActive = true; resetBoss(); }
+  // reset boss and deactivate — boss re-activates when player climbs back to trigger zone
+  if (bossTriggered && !bossDefeated) { bossActive = false; resetBoss(); }
   countdown = 3;
   countdownTick = 0;
   timerRunning = false;
