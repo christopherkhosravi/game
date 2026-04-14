@@ -819,3 +819,55 @@ Every place the name "HNOV" appeared as visible text to the player was changed t
 - `ctx.fillText('HNOV', ...)` on the loading/title canvas draw
 
 Code identifiers (`drawHnov`, `HNOV SPRITE SYSTEM` comment, `// Hnov sprite` comment) were **not** changed.
+
+## Boss Fight System
+
+**Trigger:** When `player.y < BOSS_TRIGGER_Y (-2300)` during normal gameplay, `bossTriggered = true` and the boss intro cutscene plays. Only fires once per run — if the player dies and respawns, the boss fight resets without replaying the intro.
+
+**State variables (GAME STATE section):**
+- `bossTriggered` — true once the intro has fired; prevents re-triggering on respawn
+- `bossDefeated` — true after boss death cutscene completes; chai cup reappears and win is allowed
+- `bossActive` — true while the boss fight is live (false during cutscenes, false after defeat)
+- `bossData` — boss entity: `{x,y,w:40,h:40,hp,maxHp,phase,phaseTimer,driftAngle,dashVx,dashVy,hitCooldown,projectiles[]}`
+- `bossCsSet` (1=intro, 2=death), `bossCsClip`, `bossCsExiting`, `bossCsExitStart`, `bossCsFadeState`, `bossCsFadeStart`
+- `BOSS_CS2_SUBS` / `BOSS_CS3_SUBS` — subtitle text arrays for each cutscene set
+
+**Boss behavior FSM (`updateBoss()`):**
+- `float` — drifts left/right at `spawnY=-2480` with `sin(driftAngle)*150`. After `phaseTimer` expires, picks `fire` or `dash` randomly.
+- `fire` — 40-frame wind-up, then fires one circular projectile aimed at player's current position at speed 3.5. Returns to `float`.
+- `dash` — moves at speed 7 directly toward player's position at moment of dash start. Up to 150 frames or until hitting level bounds. Checks spike (`enemies` array) collisions each frame with `hitCooldown=45` debounce. Each spike hit = -1 HP; at 0 HP triggers death cutscene.
+- `pause` — 60 frames stationary after dash ends.
+- `ascend` — returns to `spawnY` at speed 3, then `float`.
+
+**Damage rules:**
+- Boss HP: 3. Only damaged by spike enemy collision **during a dash**.
+- `hitCooldown = 45` prevents multi-hit from the same spike overlap.
+- Boss body collision or projectile collision → `killPlayer()` (same death sequence as spike/hazard death).
+- On player death: `respawn()` sets `bossActive = true` and calls `resetBoss()` — boss returns to spawn with full HP.
+
+**`killPlayer()` helper:** Sets `p.dead`, `deathPhase`, `gameState = 'dead'`, and `deadOverlayTimer` in one call. Used by `updateBoss()` only; `checkHazards()` keeps its own inline death code unchanged.
+
+**Cutscene system extension (`gameState = 'bosscutscene'`):**
+- `beginBossCutscene(set)` — sets `bossCsSet`, resets clip/fade state, sets `gameState = 'bosscutscene'`, plays first video.
+- `_bcsVid(clip)` — returns the correct `<video>` element: set 1 uses `bossCutVid1–3`, set 2 uses `bossCutVid4–6`.
+- `drawBossCutscene()` — mirrors `drawCutscene()` logic with boss cutscene variables. Exit callbacks: set 1 → `gameState='playing'; bossActive=true; resetBoss()`; set 2 → `gameState='playing'; bossDefeated=true; bossActive=false`.
+- Skip: Space or R during `bosscutscene` pauses all 6 boss videos and triggers exit.
+- `ended` events: vids 1,2 (set 1) and 4,5 (set 2) → `bossCsFadeState='out'`; vid 3 (set 1) and 6 (set 2) → `bossCsExiting=true`.
+
+**Video assets (`animations/cutscenes/`):**
+| Element ID | File | Cutscene |
+|---|---|---|
+| bossCutVid1 | cutscene 2 - 1.mp4 | Boss intro clip 1 — "Is that Jmes??" |
+| bossCutVid2 | cutscene 2 - 2.mp4 | Boss intro clip 2 — "Dab up, you see my tea?" |
+| bossCutVid3 | cutscene 2 - 3.mp4 | Boss intro clip 3 — "Your chai is mine, bitch!" |
+| bossCutVid4 | cutscene 3 - 1.mp4 | Boss death clip 1 — "FUUUUUUUUUUUU!!!1" |
+| bossCutVid5 | cutscene 3 - 2.mp4 | Boss death clip 2 — "Jmes, I'll miss you 5ever" |
+| bossCutVid6 | cutscene 3 - 3.mp4 | Boss death clip 3 — "Finally....my chai!" |
+
+**Chai cup visibility:** Goal is hidden when `bossTriggered && !bossDefeated`. Win check returns early under the same condition.
+
+**Full restart (R from win/playing):** `startGame()` resets `bossTriggered`, `bossDefeated`, `bossActive`, and calls `resetBoss()`.
+
+**Rendering (drawWorld(), 2× scaled context):** Boss drawn after particles — purple rectangle with inner detail, red "eyes", HP dots above. Projectiles drawn as pink circles with glow. Boss flashes white briefly after taking a spike hit (`hitCooldown > 30 && hitCooldown % 6 < 3`).
+
+**Spawn position:** `BOSS_SPAWN_X=380, BOSS_SPAWN_Y=-2480`. Drift amplitude ±150 world units → boss centre ranges x=230–530, safe from walls. Spawn is above existing spikes at y≈-2544/−2551 (those are near x=13/775, outside drift range).

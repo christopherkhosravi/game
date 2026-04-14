@@ -75,6 +75,12 @@ body{
   <video id="cutsceneVid1" src="animations/cutscene_1_real.mp4" preload="auto" muted playsinline style="display:none"></video>
   <video id="cutsceneVid2" src="animations/cutscene_1.mp4" preload="auto" muted playsinline style="display:none"></video>
   <video id="cutsceneVid3" src="animations/cutscene_2.mp4" preload="auto" muted playsinline style="display:none"></video>
+  <video id="bossCutVid1" src="animations/cutscenes/cutscene%202%20-%201.mp4" preload="auto" muted playsinline style="display:none"></video>
+  <video id="bossCutVid2" src="animations/cutscenes/cutscene%202%20-%202.mp4" preload="auto" muted playsinline style="display:none"></video>
+  <video id="bossCutVid3" src="animations/cutscenes/cutscene%202%20-%203.mp4" preload="auto" muted playsinline style="display:none"></video>
+  <video id="bossCutVid4" src="animations/cutscenes/cutscene%203%20-%201.mp4" preload="auto" muted playsinline style="display:none"></video>
+  <video id="bossCutVid5" src="animations/cutscenes/cutscene%203%20-%202.mp4" preload="auto" muted playsinline style="display:none"></video>
+  <video id="bossCutVid6" src="animations/cutscenes/cutscene%203%20-%203.mp4" preload="auto" muted playsinline style="display:none"></video>
   <div id="overlay">
     <div id="overlayInner">
       <div id="overlayTitle">Comox</div>
@@ -479,6 +485,33 @@ let lbTitleShow    = false;
 let lbTitleScores  = null;
 let lbTitleLoading = false;
 
+// — boss fight —
+const BOSS_TRIGGER_Y = -2300; // player.y threshold that triggers boss intro
+const BOSS_SPAWN_X = 380, BOSS_SPAWN_Y = -2480;
+const bossData = {
+  x: BOSS_SPAWN_X, y: BOSS_SPAWN_Y, w: 40, h: 40,
+  spawnX: BOSS_SPAWN_X, spawnY: BOSS_SPAWN_Y,
+  hp: 3, maxHp: 3,
+  phase: 'float', // 'float'|'fire'|'dash'|'pause'|'ascend'
+  phaseTimer: 120,
+  driftAngle: 0,
+  dashVx: 0, dashVy: 0,
+  hitCooldown: 0,
+  projectiles: [], // [{x,y,vx,vy,w,h,life}]
+};
+let bossTriggered = false; // boss intro cutscene has been triggered at least once
+let bossDefeated  = false; // boss dead, chai cup visible, win allowed
+let bossActive    = false; // boss fight currently in progress
+// — boss cutscene —
+let bossCsSet       = 1;      // 1 = intro, 2 = death
+let bossCsClip      = 1;
+let bossCsExiting   = false;
+let bossCsExitStart = 0;
+let bossCsFadeState = 'none'; // 'none'|'out'|'in'
+let bossCsFadeStart = 0;
+const BOSS_CS2_SUBS = ['Is that Jmes??', 'Dab up, you see my tea?', 'Your chai is mine, bitch!'];
+const BOSS_CS3_SUBS = ['FUUUUUUUUUUUU!!!1', "Jmes, I'll miss you 5ever", 'Finally....my chai!'];
+
 // ─── UPDATE ──────────────────────────────────────────────────────────────────
 function update() {
   if (gameState !== 'playing' && !(gameState === 'dead' && player.dead)) return;
@@ -778,8 +811,18 @@ function update() {
   // — hazard & enemy collision —
   checkHazards();
 
+  // — boss trigger —
+  if (!bossTriggered && !bossDefeated && !player.dead && player.y < BOSS_TRIGGER_Y) {
+    bossTriggered = true;
+    beginBossCutscene(1);
+    return;
+  }
+  // — boss update —
+  if (bossActive && !player.dead) updateBoss();
+
   // — win —
   if (rectsOverlap(p.x,p.y,p.w,p.h, GOAL.x,GOAL.y,GOAL.w,GOAL.h)) {
+    if (bossTriggered && !bossDefeated) return; // chai cup hidden; boss must be defeated first
     if (timerRunning) timerFrozenMs = performance.now() - timerStartTime;
     timerRunning = false;
     gameState = 'win'; winTimer = 0;
@@ -884,12 +927,106 @@ function checkHazards() {
   }
 }
 
+function killPlayer() {
+  const p = player;
+  if (p.dead) return;
+  p.dead = true; p.state = 'dying'; p.animFrame = 0; p.animT = 0;
+  p.vx = 0; p.vy = 0; p.dashTimer = 0; p.dashGrace = 0;
+  deathTimer = 0; deathPhase = 'dying'; gameState = 'dead'; deadOverlayTimer = 0;
+}
+
+function resetBoss() {
+  bossData.x = bossData.spawnX; bossData.y = bossData.spawnY;
+  bossData.hp = bossData.maxHp;
+  bossData.phase = 'float'; bossData.phaseTimer = 120;
+  bossData.driftAngle = 0;
+  bossData.dashVx = 0; bossData.dashVy = 0;
+  bossData.hitCooldown = 0;
+  bossData.projectiles = [];
+}
+
+function updateBoss() {
+  const b = bossData;
+  if (b.hitCooldown > 0) b.hitCooldown--;
+
+  if (b.phase === 'float') {
+    b.driftAngle += 0.025;
+    b.x = b.spawnX + Math.sin(b.driftAngle) * 150;
+    b.y = b.spawnY;
+    if (--b.phaseTimer <= 0) {
+      if (Math.random() < 0.5) {
+        b.phase = 'fire'; b.phaseTimer = 40;
+      } else {
+        const dx = (player.x + 6) - (b.x + b.w / 2);
+        const dy = (player.y + 8) - (b.y + b.h / 2);
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        b.dashVx = dx / dist * 7; b.dashVy = dy / dist * 7;
+        b.phase = 'dash'; b.phaseTimer = 150;
+      }
+    }
+  } else if (b.phase === 'fire') {
+    if (--b.phaseTimer <= 0) {
+      const dx = (player.x + 6) - (b.x + b.w / 2);
+      const dy = (player.y + 8) - (b.y + b.h / 2);
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      b.projectiles.push({ x: b.x + b.w / 2 - 4, y: b.y + b.h / 2 - 4, w: 8, h: 8,
+        vx: dx / dist * 3.5, vy: dy / dist * 3.5, life: 300 });
+      b.phase = 'float'; b.phaseTimer = 80 + Math.floor(Math.random() * 60);
+    }
+  } else if (b.phase === 'dash') {
+    b.x += b.dashVx; b.y += b.dashVy;
+    if (b.hitCooldown <= 0) {
+      for (const e of enemies) {
+        if (rectsOverlap(b.x, b.y, b.w, b.h, e.x, e.y, e.w, e.h)) {
+          b.hp--;
+          b.hitCooldown = 45;
+          spawnParticles(b.x + b.w / 2, b.y + b.h / 2, '#cd4acd', 14, 7, 7, 22);
+          if (b.hp <= 0) { bossActive = false; beginBossCutscene(2); return; }
+          break;
+        }
+      }
+    }
+    if (--b.phaseTimer <= 0 || b.x < 16 || b.x + b.w > LW - 16 || b.y > GROUND_Y || b.y < -2700) {
+      b.phase = 'pause'; b.phaseTimer = 60;
+    }
+  } else if (b.phase === 'pause') {
+    if (--b.phaseTimer <= 0) { b.phase = 'ascend'; b.phaseTimer = 200; }
+  } else if (b.phase === 'ascend') {
+    b.driftAngle += 0.025;
+    const tx = b.spawnX + Math.sin(b.driftAngle) * 150;
+    const ty = b.spawnY;
+    const ddx = tx - b.x, ddy = ty - b.y;
+    b.x += Math.sign(ddx) * Math.min(3, Math.abs(ddx));
+    b.y += Math.sign(ddy) * Math.min(3, Math.abs(ddy));
+    if (--b.phaseTimer <= 0 || Math.abs(ddy) < 3) {
+      b.y = b.spawnY;
+      b.phase = 'float'; b.phaseTimer = 80 + Math.floor(Math.random() * 60);
+    }
+  }
+
+  // update projectiles
+  b.projectiles = b.projectiles.filter(pr => {
+    pr.x += pr.vx; pr.y += pr.vy; pr.life--;
+    if (!player.dead && rectsOverlap(player.x + 2, player.y + 2, player.w - 4, player.h - 4, pr.x, pr.y, pr.w, pr.h)) {
+      killPlayer(); return false;
+    }
+    return pr.life > 0;
+  });
+
+  // boss body vs player
+  if (!player.dead && rectsOverlap(player.x + 2, player.y + 2, player.w - 4, player.h - 4, b.x, b.y, b.w, b.h)) {
+    killPlayer();
+  }
+}
+
 function respawn() {
   const old = player;
   player = makePlayer();
   if (_customRespawn !== null) { player.x = _customRespawn.x; player.y = _customRespawn.y; }
   spawnParticles(old.x+old.w/2, old.y+old.h/2, P.h5, 16, 8, 8, 24);
   screenShake = 6;
+  // reset boss if fight was in progress
+  if (bossTriggered && !bossDefeated) { bossActive = true; resetBoss(); }
   countdown = 3;
   countdownTick = 0;
   timerRunning = false;
@@ -1292,21 +1429,63 @@ function drawWorld() {
     ctx.stroke();
   }
 
-  // — goal —
-  const kSize = 80;
-  const kx = GOAL.x + GOAL.w / 2 - kSize / 2;
-  const ky = GOAL.y + GOAL.h / 2 - kSize / 2;
-  const kImg = KULLAD_IMGS[Math.floor(frame * 0.4) % KULLAD_IMGS.length];
-  if (kImg && kImg.complete && kImg.naturalWidth > 0) {
-    ctx.drawImage(kImg, kx, ky, kSize, kSize);
-  } else {
-    // fallback while frames load
-    const gt = (frame * 0.05) % (Math.PI * 2);
-    r(GOAL.x+3, GOAL.y, 3, GOAL.h, '#3a2a5e');
-    r(GOAL.x+6, GOAL.y+2, 14, 10, '#6a5acd');
-    r(GOAL.x+6, GOAL.y+2, 14, 3,  '#9a8aff');
-    ctx.fillStyle = `rgba(154,138,255,${0.15 + Math.sin(gt)*0.1})`;
-    ctx.fillRect(GOAL.x-4, GOAL.y-4, GOAL.w+8, GOAL.h+8);
+  // — goal — (hidden during boss fight until boss is defeated)
+  if (!bossTriggered || bossDefeated) {
+    const kSize = 80;
+    const kx = GOAL.x + GOAL.w / 2 - kSize / 2;
+    const ky = GOAL.y + GOAL.h / 2 - kSize / 2;
+    const kImg = KULLAD_IMGS[Math.floor(frame * 0.4) % KULLAD_IMGS.length];
+    if (kImg && kImg.complete && kImg.naturalWidth > 0) {
+      ctx.drawImage(kImg, kx, ky, kSize, kSize);
+    } else {
+      // fallback while frames load
+      const gt = (frame * 0.05) % (Math.PI * 2);
+      r(GOAL.x+3, GOAL.y, 3, GOAL.h, '#3a2a5e');
+      r(GOAL.x+6, GOAL.y+2, 14, 10, '#6a5acd');
+      r(GOAL.x+6, GOAL.y+2, 14, 3,  '#9a8aff');
+      ctx.fillStyle = `rgba(154,138,255,${0.15 + Math.sin(gt)*0.1})`;
+      ctx.fillRect(GOAL.x-4, GOAL.y-4, GOAL.w+8, GOAL.h+8);
+    }
+  }
+
+  // — boss —
+  if (bossActive) {
+    const b = bossData;
+    ctx.save();
+    // outer glow aura
+    ctx.shadowColor = '#cd4acd';
+    ctx.shadowBlur = 20;
+    ctx.fillStyle = '#2a0a2a';
+    ctx.fillRect(b.x - 4, b.y - 4, b.w + 8, b.h + 8);
+    // body — flash white briefly after taking a spike hit
+    ctx.fillStyle = (b.hitCooldown > 30 && b.hitCooldown % 6 < 3) ? '#ffffff' : '#cd4acd';
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.shadowBlur = 0;
+    // inner detail
+    ctx.fillStyle = '#7a2a7a';
+    ctx.fillRect(b.x + 4, b.y + 4, b.w - 8, b.h - 8);
+    // eyes
+    ctx.fillStyle = '#ff4444';
+    ctx.fillRect(b.x + 6, b.y + 12, 8, 6);
+    ctx.fillRect(b.x + b.w - 14, b.y + 12, 8, 6);
+    // HP dots above boss
+    const dotW = 10, dotGap = 4;
+    const dotStartX = b.x + (b.w - (b.maxHp * dotW + (b.maxHp - 1) * dotGap)) / 2;
+    for (let i = 0; i < b.maxHp; i++) {
+      ctx.fillStyle = i < b.hp ? '#ff4a4a' : '#3e1a1a';
+      ctx.fillRect(dotStartX + i * (dotW + dotGap), b.y - 12, dotW, 6);
+    }
+    // projectiles
+    for (const pr of b.projectiles) {
+      ctx.shadowColor = '#ff6b9d';
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = '#ff6b9d';
+      ctx.beginPath();
+      ctx.arc(pr.x + pr.w / 2, pr.y + pr.h / 2, pr.w / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    ctx.restore();
   }
 
   // — particles —
@@ -1803,6 +1982,81 @@ function drawCutsceneSubtitle(text) {
   ctx.restore();
 }
 
+// ─── BOSS CUTSCENE ───────────────────────────────────────────────────────────
+function beginBossCutscene(set) {
+  bossCsSet       = set;
+  bossCsClip      = 1;
+  bossCsExiting   = false;
+  bossCsExitStart = 0;
+  bossCsFadeState = 'none';
+  bossCsFadeStart = 0;
+  gameState = 'bosscutscene';
+  const v = document.getElementById(set === 1 ? 'bossCutVid1' : 'bossCutVid4');
+  v.currentTime = 0;
+  v.play().catch(() => {});
+}
+
+function _bcsVid(clip) {
+  return document.getElementById(bossCsSet === 1 ? 'bossCutVid' + clip : 'bossCutVid' + (clip + 3));
+}
+
+function drawBossCutscene() {
+  const now = performance.now();
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, CW, CH);
+
+  if (bossCsExiting) {
+    const t = Math.min(1, (now - bossCsExitStart) / CUTSCENE_EXIT_MS);
+    if (t < 1) {
+      const vid = _bcsVid(bossCsClip);
+      if (vid.readyState >= 2 && vid.videoWidth > 0) {
+        const scale = Math.max(CW / vid.videoWidth, CH / vid.videoHeight);
+        const dw = vid.videoWidth * scale, dh = vid.videoHeight * scale;
+        ctx.drawImage(vid, (CW - dw) / 2, (CH - dh) / 2, dw, dh);
+      }
+      ctx.save(); ctx.globalAlpha = t; ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, CW, CH); ctx.restore();
+    } else {
+      // exit complete — transition based on which cutscene set
+      if (bossCsSet === 1) {
+        gameState = 'playing'; bossActive = true; resetBoss();
+      } else {
+        gameState = 'playing'; bossDefeated = true; bossActive = false;
+      }
+    }
+    return;
+  }
+
+  let fadeAlpha = 0;
+  if (bossCsFadeState === 'out') {
+    fadeAlpha = Math.min(1, (now - bossCsFadeStart) / CUTSCENE_FADE_MS);
+    if (fadeAlpha >= 1) {
+      bossCsClip++;
+      const vn = _bcsVid(bossCsClip);
+      vn.currentTime = 0; vn.play().catch(() => {});
+      bossCsFadeState = 'in'; bossCsFadeStart = now; fadeAlpha = 1;
+    }
+  } else if (bossCsFadeState === 'in') {
+    fadeAlpha = 1 - Math.min(1, (now - bossCsFadeStart) / CUTSCENE_FADE_MS);
+    if (fadeAlpha <= 0) { bossCsFadeState = 'none'; fadeAlpha = 0; }
+  }
+
+  const vid = _bcsVid(bossCsClip);
+  if (vid.readyState >= 2 && vid.videoWidth > 0) {
+    const scale = Math.max(CW / vid.videoWidth, CH / vid.videoHeight);
+    const dw = vid.videoWidth * scale, dh = vid.videoHeight * scale;
+    ctx.drawImage(vid, (CW - dw) / 2, (CH - dh) / 2, dw, dh);
+  }
+
+  if (fadeAlpha > 0) {
+    ctx.save(); ctx.globalAlpha = fadeAlpha; ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, CW, CH); ctx.restore();
+  }
+
+  if (bossCsFadeState !== 'out' && !bossCsExiting) {
+    const subs = bossCsSet === 1 ? BOSS_CS2_SUBS : BOSS_CS3_SUBS;
+    drawCutsceneSubtitle(subs[bossCsClip - 1]);
+  }
+}
+
 // ─── RENDER ──────────────────────────────────────────────────────────────────
 function drawLoadingScreen() {
   const prog = _loadTracker ? Math.min(1, _loadTracker.done / _loadTracker.total) : 0;
@@ -1861,6 +2115,7 @@ function render() {
   ctx.clearRect(0,0,CW,CH);
   if (gameState === 'loading') { drawLoadingScreen(); return; }
   if (gameState === 'cutscene') { drawCutscene(); return; }
+  if (gameState === 'bosscutscene') { drawBossCutscene(); return; }
   if (gameState === 'dead') ctx.filter = 'blur(6px)';
   drawBackground();
   if (gameState === 'playing' || gameState === 'win' || gameState === 'dead') drawWorld();
@@ -1956,6 +2211,9 @@ function startGame() {
   lbScores = null; lbLoading = false; lbError = null;
   lbNameEntry = false; lbName = ['A','A','A','A','A']; lbNameSlot = 0;
   lbSubmitting = false; lbSubmittedId = null; lbTitleShow = false;
+  // reset boss fight state
+  bossTriggered = false; bossDefeated = false; bossActive = false;
+  resetBoss();
   document.getElementById('overlay').classList.add('hidden');
 }
 
@@ -1988,6 +2246,13 @@ document.addEventListener('keydown', e => {
     document.getElementById('cutsceneVid2').pause();
     document.getElementById('cutsceneVid3').pause();
     cutsceneFadeState = 'none';
+  }
+  if ((e.code === 'Space' || e.code === 'KeyR') && gameState === 'bosscutscene' && !bossCsExiting) {
+    bossCsExiting = true;
+    bossCsExitStart = performance.now();
+    ['bossCutVid1','bossCutVid2','bossCutVid3','bossCutVid4','bossCutVid5','bossCutVid6']
+      .forEach(id => { const v = document.getElementById(id); if (v) v.pause(); });
+    bossCsFadeState = 'none';
   }
   if (e.code === 'KeyR' && (gameState === 'playing' || gameState === 'win') && !player.dead) {
     startGame();
@@ -2064,6 +2329,28 @@ document.getElementById('cutsceneVid3').addEventListener('ended', () => {
   cutsceneExiting = true;
   cutsceneExitStart = performance.now();
   cutsceneFadeState = 'none';
+});
+
+// boss cutscene video listeners — clips 1+2 fade to next; clip 3 exits
+['bossCutVid1','bossCutVid2'].forEach(id => {
+  document.getElementById(id).addEventListener('ended', () => {
+    if (gameState !== 'bosscutscene' || bossCsSet !== 1 || bossCsExiting || bossCsFadeState !== 'none') return;
+    bossCsFadeState = 'out'; bossCsFadeStart = performance.now();
+  });
+});
+['bossCutVid4','bossCutVid5'].forEach(id => {
+  document.getElementById(id).addEventListener('ended', () => {
+    if (gameState !== 'bosscutscene' || bossCsSet !== 2 || bossCsExiting || bossCsFadeState !== 'none') return;
+    bossCsFadeState = 'out'; bossCsFadeStart = performance.now();
+  });
+});
+document.getElementById('bossCutVid3').addEventListener('ended', () => {
+  if (gameState !== 'bosscutscene' || bossCsSet !== 1 || bossCsExiting) return;
+  bossCsExiting = true; bossCsExitStart = performance.now(); bossCsFadeState = 'none';
+});
+document.getElementById('bossCutVid6').addEventListener('ended', () => {
+  if (gameState !== 'bosscutscene' || bossCsSet !== 2 || bossCsExiting) return;
+  bossCsExiting = true; bossCsExitStart = performance.now(); bossCsFadeState = 'none';
 });
 document.getElementById('scoresBtn').addEventListener('click', () => {
   document.getElementById('overlay').classList.add('hidden');
