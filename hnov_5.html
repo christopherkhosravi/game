@@ -435,6 +435,7 @@ let deadOverlayTimer = 0;
 let deathPhase = 'dying'; // 'dying' | 'fallen'
 let screenShake = 0;
 let godMode = false;
+let _customRespawn = null; // {x, y} world coords set via F in god mode; null = default spawn
 
 // level editor (god mode only)
 let editorSelectedPlat = -1;  // index into staticPlats; -1 = none selected
@@ -517,6 +518,10 @@ function update() {
       if (keys['ArrowRight']) { p.x += GM_SPEED; p.facingRight = true; }
       if (keys['ArrowUp'])    p.y -= GM_SPEED;
       if (keys['ArrowDown'])  p.y += GM_SPEED;
+    }
+    // F saves current player position as custom respawn point
+    if (justPressed['KeyF']) {
+      _customRespawn = { x: player.x, y: player.y };
     }
     // editor: E exports current spike array + platform positions to console
     if (justPressed['KeyE']) {
@@ -880,6 +885,7 @@ function checkHazards() {
 function respawn() {
   const old = player;
   player = makePlayer();
+  if (_customRespawn !== null) { player.x = _customRespawn.x; player.y = _customRespawn.y; }
   spawnParticles(old.x+old.w/2, old.y+old.h/2, P.h5, 16, 8, 8, 24);
   screenShake = 6;
   countdown = 3;
@@ -1880,11 +1886,11 @@ function render() {
     ctx.font = '11px "Courier New"';
     ctx.fillStyle = 'rgba(255,107,157,0.75)';
     const _edLines = [
-      'EDITOR: click=place spike  click spike=remove',
+      'EDITOR: click=place spike  click spike=remove  F=save respawn',
       'click plat=select+drag  arrows=nudge  shift+←/→=scale  E=export',
       editorSelectedPlat >= 0
         ? `selected: plat[${editorSelectedPlat}]  ${staticPlats[editorSelectedPlat].w}×${staticPlats[editorSelectedPlat].h}`
-        : 'no platform selected',
+        : (_customRespawn !== null ? `respawn: (${Math.round(_customRespawn.x)}, ${Math.round(_customRespawn.y)})` : 'no platform selected'),
     ];
     for (let _i = 0; _i < _edLines.length; _i++) {
       ctx.fillText(_edLines[_i], CW - 16, 40 + _i * 15);
@@ -1895,6 +1901,17 @@ function render() {
       ctx.fillStyle = `rgba(255,107,157,${Math.min(1, _editorExportMsg / 20)})`;
       ctx.textAlign = 'center';
       ctx.fillText('Exported to console', CW / 2, CH - 60);
+    }
+    // custom respawn marker — crosshair + circle at saved position
+    if (_customRespawn !== null) {
+      const mx = (_customRespawn.x + 6 - cam.x) * 2;
+      const my = (_customRespawn.y + 8 - cam.y) * 2;
+      ctx.strokeStyle = '#00ffcc';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(mx - 10, my); ctx.lineTo(mx + 10, my); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(mx, my - 10); ctx.lineTo(mx, my + 10); ctx.stroke();
+      ctx.beginPath(); ctx.arc(mx, my, 6, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = 1;
     }
     ctx.textAlign = 'left';
     const dotX = (player.x + 6 - cam.x) * 2;

@@ -789,3 +789,20 @@ where `sign_src_rows = sign_bottom_row + 1` (number of source rows from crop top
 | 18 | billboard_5.png  | 694 | 329 | 200 |  95 |
 
 **No other properties changed** — x, y, w, and type are all identical to before.
+
+## God Mode — Custom Respawn Point
+
+**What it does:** While in god mode, pressing **F** saves the player's current world position as a custom respawn point. When the player dies in normal play (outside god mode), they respawn at that saved position instead of the default spawn. Only one save exists at a time — pressing F again overwrites it. Does not persist across page reloads.
+
+**Key variable:**
+- `_customRespawn` — `null` (no custom point) or `{x, y}` world coords; declared in GAME STATE section alongside `godMode`.
+
+**Visual marker:** A cyan (`#00ffcc`) crosshair + circle (radius 6) drawn at the saved position in the 2× canvas context. Only drawn in god mode. Uses `player`-centre anchor math identical to the god mode red position dot: `mx = (_customRespawn.x + 6 - cam.x) * 2`, `my = (_customRespawn.y + 8 - cam.y) * 2`.
+
+**HUD:** `F=save respawn` added to the first editor hint line. Third hint line shows saved coordinates `respawn: (x, y)` when no platform is selected and a respawn point exists.
+
+**`respawn()` integration:** One line after `player = makePlayer()`:
+```js
+if (_customRespawn !== null) { player.x = _customRespawn.x; player.y = _customRespawn.y; }
+```
+No other respawn logic is touched — countdown, timer reset, particles all run as normal.
