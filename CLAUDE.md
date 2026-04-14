@@ -806,3 +806,16 @@ where `sign_src_rows = sign_bottom_row + 1` (number of source rows from crop top
 if (_customRespawn !== null) { player.x = _customRespawn.x; player.y = _customRespawn.y; }
 ```
 No other respawn logic is touched — countdown, timer reset, particles all run as normal.
+
+## Text Changes — HUD Removal and Name Rename
+
+### Top-left HUD debug text removed
+The `#hudLeft` element previously showed two `<span>` tags: the game name "HNOV" and a live animation state label (e.g. "IDLE", "RUN", "DASH"). Both spans were removed from the HTML. The corresponding JS lines that computed `stateLabel` and set `hudState.textContent` were also removed to avoid a null reference error on the now-absent element.
+
+### "HNOV" → "Comox" rename (player-visible text only)
+Every place the name "HNOV" appeared as visible text to the player was changed to "Comox":
+- `<title>` browser tab
+- `#overlayTitle` div (title screen overlay)
+- `ctx.fillText('HNOV', ...)` on the loading/title canvas draw
+
+Code identifiers (`drawHnov`, `HNOV SPRITE SYSTEM` comment, `// Hnov sprite` comment) were **not** changed.

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>HNOV</title>
+<title>Comox</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 body{
@@ -67,8 +67,6 @@ body{
 <div id="wrap">
   <div id="hud">
     <div id="hudLeft">
-      <span>HNOV</span>
-      <span id="hudState">IDLE</span>
     </div>
     <div id="abilityBar">
     </div>
@@ -79,7 +77,7 @@ body{
   <video id="cutsceneVid3" src="animations/cutscene_2.mp4" preload="auto" muted playsinline style="display:none"></video>
   <div id="overlay">
     <div id="overlayInner">
-      <div id="overlayTitle">HNOV</div>
+      <div id="overlayTitle">Comox</div>
       <div id="overlayName">a movement story</div>
       <div id="overlayMsg">
         WASD / ARROWS · move<br>
@@ -836,9 +834,6 @@ function update() {
   } else if (p.dashGhosts.length > 0) {
     p.dashGhosts = [];
   }
-
-  const stateLabel = p.bouncing ? 'BOUNCE' : p.state.toUpperCase();
-  document.getElementById('hudState').textContent = stateLabel;
 
   if (screenShake > 0) screenShake--;
 
@@ -1814,7 +1809,7 @@ function drawLoadingScreen() {
   ctx.shadowBlur = 48;
   ctx.fillStyle = '#e8d8ff';
   ctx.font = 'bold 128px "Courier New"';
-  ctx.fillText('HNOV', CW / 2, CH / 2 - 90);
+  ctx.fillText('Comox', CW / 2, CH / 2 - 90);
   ctx.shadowBlur = 18;
   ctx.fillStyle = '#6a5acd';
   ctx.font = '15px "Courier New"';
