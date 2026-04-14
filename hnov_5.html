@@ -216,20 +216,14 @@ const enemies = [
   {"x": 389, "y": -619, "w": 51, "h": 18, "ox": 389, "range": 0, "speed": 0, "dir": 0},
   {"x": 519, "y": -619, "w": 51, "h": 18, "ox": 519, "range": 0, "speed": 0, "dir": 0},
   {"x": 15, "y": -596, "w": 51, "h": 18, "ox": 15, "range": 0, "speed": 0, "dir": 0},
-  {"x": 776, "y": -1173, "w": 51, "h": 18, "ox": 776, "range": 0, "speed": 0, "dir": 0},
   {"x": 15, "y": -1179, "w": 51, "h": 18, "ox": 15, "range": 0, "speed": 0, "dir": 0},
   {"x": 140, "y": -776, "w": 51, "h": 18, "ox": 140, "range": 0, "speed": 0, "dir": 0},
   {"x": 127, "y": -1246, "w": 51, "h": 18, "ox": 127, "range": 0, "speed": 0, "dir": 0},
   {"x": 174, "y": -1247, "w": 51, "h": 18, "ox": 174, "range": 0, "speed": 0, "dir": 0},
   {"x": 222, "y": -1246, "w": 51, "h": 18, "ox": 222, "range": 0, "speed": 0, "dir": 0},
-  {"x": 412, "y": -1370, "w": 51, "h": 18, "ox": 412, "range": 0, "speed": 0, "dir": 0},
-  {"x": 602, "y": -1382, "w": 51, "h": 18, "ox": 602, "range": 0, "speed": 0, "dir": 0},
-  {"x": 651, "y": -1382, "w": 51, "h": 18, "ox": 651, "range": 0, "speed": 0, "dir": 0},
-  {"x": 697, "y": -1382, "w": 51, "h": 18, "ox": 697, "range": 0, "speed": 0, "dir": 0},
   {"x": 475, "y": -1471, "w": 51, "h": 18, "ox": 475, "range": 0, "speed": 0, "dir": 0},
   {"x": 515, "y": -1471, "w": 51, "h": 18, "ox": 515, "range": 0, "speed": 0, "dir": 0},
   {"x": 558, "y": -1471, "w": 51, "h": 18, "ox": 558, "range": 0, "speed": 0, "dir": 0},
-  {"x": 8, "y": -1351, "w": 51, "h": 18, "ox": 8, "range": 0, "speed": 0, "dir": 0},
   {"x": 41, "y": -1495, "w": 51, "h": 18, "ox": 41, "range": 0, "speed": 0, "dir": 0},
   {"x": 340, "y": -1770, "w": 51, "h": 18, "ox": 340, "range": 0, "speed": 0, "dir": 0},
   {"x": 447, "y": -1769, "w": 51, "h": 18, "ox": 447, "range": 0, "speed": 0, "dir": 0},
@@ -242,6 +236,11 @@ const enemies = [
   {"x": 152, "y": -2290, "w": 51, "h": 18, "ox": 152, "range": 0, "speed": 0, "dir": 0},
   {"x": 76, "y": -2484, "w": 51, "h": 18, "ox": 76, "range": 0, "speed": 0, "dir": 0},
   {"x": 737, "y": -2476, "w": 51, "h": 18, "ox": 737, "range": 0, "speed": 0, "dir": 0},
+  {"x": 774, "y": -1381, "w": 51, "h": 18, "ox": 774, "range": 0, "speed": 0, "dir": 0},
+  {"x": 724, "y": -1382, "w": 51, "h": 18, "ox": 724, "range": 0, "speed": 0, "dir": 0},
+  {"x": 677, "y": -1381, "w": 51, "h": 18, "ox": 677, "range": 0, "speed": 0, "dir": 0},
+  {"x": 638, "y": -1381, "w": 51, "h": 18, "ox": 638, "range": 0, "speed": 0, "dir": 0},
+  {"x": 9, "y": -1561, "w": 51, "h": 18, "ox": 9, "range": 0, "speed": 0, "dir": 0},
 ];
 
 // goal
@@ -985,11 +984,12 @@ function updateBoss() {
           b.hitCooldown = 45;
           spawnParticles(b.x + b.w / 2, b.y + b.h / 2, '#cd4acd', 14, 7, 7, 22);
           if (b.hp <= 0) { bossActive = false; beginBossCutscene(2); return; }
+          b.phase = 'pause'; b.phaseTimer = 60; // stop dash immediately on spike hit
           break;
         }
       }
     }
-    if (--b.phaseTimer <= 0 || b.x < 16 || b.x + b.w > LW - 16 || b.y > GROUND_Y || b.y < -2700) {
+    if (b.phase === 'dash' && (--b.phaseTimer <= 0 || b.x < 16 || b.x + b.w > LW - 16 || b.y > GROUND_Y || b.y < -2700)) {
       b.phase = 'pause'; b.phaseTimer = 60;
     }
   } else if (b.phase === 'pause') {
@@ -1026,6 +1026,7 @@ function respawn() {
   const old = player;
   player = makePlayer();
   if (_customRespawn !== null) { player.x = _customRespawn.x; player.y = _customRespawn.y; }
+  if (bossDefeated) { player.x = 354; player.y = -2234; }
   spawnParticles(old.x+old.w/2, old.y+old.h/2, P.h5, 16, 8, 8, 24);
   screenShake = 6;
   // full boss reset on death — flag reappears, intro replays on next attempt
