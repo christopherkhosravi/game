@@ -490,16 +490,19 @@ let lbTitleLoading = false;
 // — boss fight —
 const BOSS_TRIGGER_Y = -2300; // player.y threshold that triggers boss intro
 const BOSS_SPAWN_X = 380, BOSS_SPAWN_Y = -2525;
+const CREATURE_YS = [-2580, -2540, -2500, -2420, -2380, -2340]; // top 3, bottom 3
+const CREATURE_W = 17, CREATURE_H = 6, CREATURE_SPEED = 3;
 const bossData = {
   x: BOSS_SPAWN_X, y: BOSS_SPAWN_Y, w: 40, h: 40,
   spawnX: BOSS_SPAWN_X, spawnY: BOSS_SPAWN_Y,
   hp: 3, maxHp: 3,
-  phase: 'float', // 'float'|'fire'|'dash'|'pause'|'ascend'
-  phaseTimer: 120,
+  phase: 'float', // 'float'|'creature'|'dash'|'pause'|'ascend'
+  phaseTimer: 300,
   driftAngle: 0,
-  dashVx: 0, dashVy: 0,
+  dashVx: 0, dashVy: 0, dashTargetX: 0, dashTargetY: 0,
   hitCooldown: 0,
-  projectiles: [], // [{x,y,vx,vy,w,h,life}]
+  creatures: [], // [{x,y,vx}]
+  isFirstMove: true,
 };
 let bossTriggered = false; // boss intro cutscene has been triggered at least once
 let bossDefeated  = false; // boss dead, chai cup visible, win allowed
@@ -944,11 +947,34 @@ function killPlayer() {
 function resetBoss() {
   bossData.x = bossData.spawnX; bossData.y = bossData.spawnY;
   bossData.hp = bossData.maxHp;
-  bossData.phase = 'float'; bossData.phaseTimer = 120;
+  bossData.phase = 'float'; bossData.phaseTimer = 300;
   bossData.driftAngle = 0;
-  bossData.dashVx = 0; bossData.dashVy = 0;
+  bossData.dashVx = 0; bossData.dashVy = 0; bossData.dashTargetX = 0; bossData.dashTargetY = 0;
   bossData.hitCooldown = 0;
-  bossData.projectiles = [];
+  bossData.creatures = [];
+  bossData.isFirstMove = true;
+}
+
+function _bossStartCreature(b) {
+  const pattern = Math.floor(Math.random() * 4);
+  b.creatures = [];
+  for (let i = 0; i < 6; i++) {
+    let vx, startX;
+    if (pattern === 0) { // all right→left
+      vx = -CREATURE_SPEED; startX = LW;
+    } else if (pattern === 1) { // all left→right
+      vx = CREATURE_SPEED; startX = -CREATURE_W;
+    } else if (pattern === 2) { // top 3 left→right, bottom 3 right→left
+      if (i < 3) { vx = CREATURE_SPEED; startX = -CREATURE_W; }
+      else        { vx = -CREATURE_SPEED; startX = LW; }
+    } else { // top 3 right→left, bottom 3 left→right
+      if (i < 3) { vx = -CREATURE_SPEED; startX = LW; }
+      else        { vx = CREATURE_SPEED; startX = -CREATURE_W; }
+    }
+    b.creatures.push({ x: startX, y: CREATURE_YS[i], vx });
+  }
+  b.phase = 'creature';
+  b.isFirstMove = false;
 }
 
 function updateBoss() {
@@ -960,39 +986,59 @@ function updateBoss() {
     b.x = b.spawnX + Math.sin(b.driftAngle) * 150;
     b.y = b.spawnY;
     if (--b.phaseTimer <= 0) {
-      if (Math.random() < 0.5) {
-        b.phase = 'fire'; b.phaseTimer = 40;
-      } else {
-        const dx = (player.x + 6) - (b.x + b.w / 2);
-        const dy = (player.y + 8) - (b.y + b.h / 2);
+      const doDash = !b.isFirstMove && player.y <= -2050 && Math.random() < 0.1;
+      if (doDash) {
+        const px = player.x + 6, py = player.y + 8;
+        const bx = b.x + b.w / 2, by = b.y + b.h / 2;
+        const dx = px - bx, dy = py - by;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        b.dashVx = dx / dist * 7; b.dashVy = dy / dist * 7;
-        b.phase = 'dash'; b.phaseTimer = 150;
+        b.dashVx = dx / dist * 4; b.dashVy = dy / dist * 4;
+        b.dashTargetX = px; b.dashTargetY = py;
+        b.phase = 'dash'; b.phaseTimer = 300;
+      } else {
+        _bossStartCreature(b);
       }
     }
-  } else if (b.phase === 'fire') {
-    if (--b.phaseTimer <= 0) {
-      const dx = (player.x + 6) - (b.x + b.w / 2);
-      const dy = (player.y + 8) - (b.y + b.h / 2);
-      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      b.projectiles.push({ x: b.x + b.w / 2 - 4, y: b.y + b.h / 2 - 4, w: 8, h: 8,
-        vx: dx / dist * 3.5, vy: dy / dist * 3.5, life: 300 });
-      b.phase = 'float'; b.phaseTimer = 80 + Math.floor(Math.random() * 60);
+  } else if (b.phase === 'creature') {
+    b.creatures = b.creatures.filter(cr => {
+      cr.x += cr.vx;
+      if (!player.dead && rectsOverlap(player.x, player.y, player.w, player.h, cr.x, cr.y, CREATURE_W, CREATURE_H)) {
+        killPlayer();
+      }
+      return cr.vx < 0 ? cr.x + CREATURE_W > 16 : cr.x < 824;
+    });
+    if (b.creatures.length === 0) {
+      b.phase = 'float'; b.phaseTimer = 300;
     }
   } else if (b.phase === 'dash') {
-    b.x += b.dashVx; b.y += b.dashVy;
-    if (b.hitCooldown <= 0) {
+    // stop when close enough to target
+    const bCx = b.x + b.w / 2, bCy = b.y + b.h / 2;
+    const rdx = b.dashTargetX - bCx, rdy = b.dashTargetY - bCy;
+    if (Math.sqrt(rdx * rdx + rdy * rdy) <= 4) {
+      b.phase = 'pause'; b.phaseTimer = 60;
+    } else {
+      b.x += b.dashVx; b.y += b.dashVy;
+      // platform collision stops dash
+      for (const pl of staticPlats.slice(3)) {
+        if (rectsOverlap(b.x, b.y, b.w, b.h, pl.x, pl.y, pl.w, pl.h)) {
+          b.phase = 'pause'; b.phaseTimer = 60; break;
+        }
+      }
+    }
+    // spike damage (only while still dashing)
+    if (b.phase === 'dash' && b.hitCooldown <= 0) {
       for (const e of enemies) {
         if (rectsOverlap(b.x, b.y, b.w, b.h, e.x, e.y, e.w, e.h)) {
           b.hp--;
           b.hitCooldown = 45;
           spawnParticles(b.x + b.w / 2, b.y + b.h / 2, '#cd4acd', 14, 7, 7, 22);
           if (b.hp <= 0) { bossActive = false; beginBossCutscene(2); return; }
-          b.phase = 'pause'; b.phaseTimer = 60; // stop dash immediately on spike hit
+          b.phase = 'pause'; b.phaseTimer = 60;
           break;
         }
       }
     }
+    // bounds / timer fallback
     if (b.phase === 'dash' && (--b.phaseTimer <= 0 || b.x < 16 || b.x + b.w > LW - 16 || b.y > GROUND_Y || b.y < -2700)) {
       b.phase = 'pause'; b.phaseTimer = 60;
     }
@@ -1007,18 +1053,9 @@ function updateBoss() {
     b.y += Math.sign(ddy) * Math.min(3, Math.abs(ddy));
     if (--b.phaseTimer <= 0 || Math.abs(ddy) < 3) {
       b.y = b.spawnY;
-      b.phase = 'float'; b.phaseTimer = 80 + Math.floor(Math.random() * 60);
+      b.phase = 'float'; b.phaseTimer = 300;
     }
   }
-
-  // update projectiles
-  b.projectiles = b.projectiles.filter(pr => {
-    pr.x += pr.vx; pr.y += pr.vy; pr.life--;
-    if (!player.dead && rectsOverlap(player.x + 2, player.y + 2, player.w - 4, player.h - 4, pr.x, pr.y, pr.w, pr.h)) {
-      killPlayer(); return false;
-    }
-    return pr.life > 0;
-  });
 
   // boss body vs player
   if (!player.dead && rectsOverlap(player.x + 2, player.y + 2, player.w - 4, player.h - 4, b.x, b.y, b.w, b.h)) {
@@ -1483,16 +1520,14 @@ function drawWorld() {
       ctx.fillStyle = i < b.hp ? '#ff4a4a' : '#3e1a1a';
       ctx.fillRect(dotStartX + i * (dotW + dotGap), b.y - 12, dotW, 6);
     }
-    // projectiles
-    for (const pr of b.projectiles) {
-      ctx.shadowColor = '#ff6b9d';
-      ctx.shadowBlur = 8;
-      ctx.fillStyle = '#ff6b9d';
-      ctx.beginPath();
-      ctx.arc(pr.x + pr.w / 2, pr.y + pr.h / 2, pr.w / 2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
+    // creatures
+    ctx.shadowColor = '#ff6b9d';
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = '#ff6b9d';
+    for (const cr of b.creatures) {
+      ctx.fillRect(cr.x, cr.y, CREATURE_W, CREATURE_H);
     }
+    ctx.shadowBlur = 0;
     ctx.restore();
   }
 

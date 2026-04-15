@@ -828,22 +828,40 @@ Code identifiers (`drawHnov`, `HNOV SPRITE SYSTEM` comment, `// Hnov sprite` com
 - `bossTriggered` — true once the intro has fired; prevents re-triggering on respawn
 - `bossDefeated` — true after boss death cutscene completes; chai cup reappears and win is allowed
 - `bossActive` — true while the boss fight is live (false during cutscenes, false after defeat)
-- `bossData` — boss entity: `{x,y,w:40,h:40,hp,maxHp,phase,phaseTimer,driftAngle,dashVx,dashVy,hitCooldown,projectiles[]}`
+- `bossData` — boss entity: `{x,y,w:40,h:40,hp,maxHp,phase,phaseTimer,driftAngle,dashVx,dashVy,dashTargetX,dashTargetY,hitCooldown,creatures[],isFirstMove}`
 - `bossCsSet` (1=intro, 2=death), `bossCsClip`, `bossCsExiting`, `bossCsExitStart`, `bossCsFadeState`, `bossCsFadeStart`
 - `BOSS_CS2_SUBS` / `BOSS_CS3_SUBS` — subtitle text arrays for each cutscene set
 
 **Boss behavior FSM (`updateBoss()`):**
-- `float` — drifts left/right at `spawnY=-2480` with `sin(driftAngle)*150`. After `phaseTimer` expires, picks `fire` or `dash` randomly.
-- `fire` — 40-frame wind-up, then fires one circular projectile aimed at player's current position at speed 3.5. Returns to `float`.
-- `dash` — moves at speed 7 directly toward player's position at moment of dash start. Up to 150 frames or until hitting level bounds. Checks spike (`enemies` array) collisions each frame with `hitCooldown=45` debounce. Each spike hit = -1 HP; at 0 HP triggers death cutscene.
-- `pause` — 60 frames stationary after dash ends.
+- `float` — drifts left/right at `spawnY=-2525` with `sin(driftAngle)*150`. 5-second timer (300 frames), then picks next move.
+- `creature` — 6 small creatures travel across the screen at fixed y positions; move is complete when all 6 have despawned. Touching a creature kills the player instantly.
+- `dash` — moves at speed 4 toward player's position captured at dash start (`dashTargetX/Y`). Stops when it reaches the target or hits a platform, spike, bounds, or timer (300 frames). Spike hit = -1 HP, dash stops; at 0 HP triggers death cutscene.
+- `pause` — 60 frames stationary after dash or creature move ends.
 - `ascend` — returns to `spawnY` at speed 3, then `float`.
+
+**Move selection:**
+- `isFirstMove = true` on spawn/reset — first action is always a creature attack.
+- If `player.y > -2050`: always creature attack (dash unavailable).
+- If `player.y <= -2050`: 90% creature, 10% dash (chosen randomly).
+- 5-second (300-frame) idle between moves via `phaseTimer`.
+- A new move cannot begin while the current one is active.
+
+**Creature system:**
+- Constants: `CREATURE_YS = [-2580,-2540,-2500,-2420,-2380,-2340]` (top 3, bottom 3 with ~80-unit gap), `CREATURE_W=17, CREATURE_H=6, CREATURE_SPEED=3`
+- Each creature: `{x, y, vx}` — no height/width stored at runtime (constants used directly)
+- Despawn condition: `vx < 0` → despawn when `x + CREATURE_W < 16`; `vx > 0` → despawn when `x > 824`
+- 4 patterns (chosen randomly with equal probability):
+  1. All 6 from right → left
+  2. All 6 from left → right
+  3. Top 3 left→right, bottom 3 right→left
+  4. Top 3 right→left, bottom 3 left→right
+- `_bossStartCreature(b)` helper spawns creatures and sets `phase = 'creature'`
 
 **Damage rules:**
 - Boss HP: 3. Only damaged by spike enemy collision **during a dash**.
 - `hitCooldown = 45` prevents multi-hit from the same spike overlap.
-- Boss body collision or projectile collision → `killPlayer()` (same death sequence as spike/hazard death).
-- On player death: `respawn()` sets `bossActive = true` and calls `resetBoss()` — boss returns to spawn with full HP.
+- Boss body contact or creature contact → `killPlayer()`.
+- On player death: full encounter resets (`bossTriggered = false`), intro replays on next attempt.
 
 **`killPlayer()` helper:** Sets `p.dead`, `deathPhase`, `gameState = 'dead'`, and `deadOverlayTimer` in one call. Used by `updateBoss()` only; `checkHazards()` keeps its own inline death code unchanged.
 
@@ -868,6 +886,8 @@ Code identifiers (`drawHnov`, `HNOV SPRITE SYSTEM` comment, `// Hnov sprite` com
 
 **Full restart (R from win/playing):** `startGame()` resets `bossTriggered`, `bossDefeated`, `bossActive`, and calls `resetBoss()`.
 
-**Rendering (drawWorld(), 2× scaled context):** Boss drawn after particles — purple rectangle with inner detail, red "eyes", HP dots above. Projectiles drawn as pink circles with glow. Boss flashes white briefly after taking a spike hit (`hitCooldown > 30 && hitCooldown % 6 < 3`).
+**Rendering (drawWorld(), 2× scaled context):** Boss drawn after particles — purple rectangle with inner detail, red "eyes", HP dots above. Creatures drawn as pink glowing rectangles (`#ff6b9d`, `shadowBlur=8`). Boss flashes white briefly after a spike hit (`hitCooldown > 30 && hitCooldown % 6 < 3`).
 
-**Spawn position:** `BOSS_SPAWN_X=380, BOSS_SPAWN_Y=-2480`. Drift amplitude ±150 world units → boss centre ranges x=230–530, safe from walls. Spawn is above existing spikes at y≈-2544/−2551 (those are near x=13/775, outside drift range).
+**Spawn position:** `BOSS_SPAWN_X=380, BOSS_SPAWN_Y=-2525`. Drift amplitude ±150 world units → boss centre ranges x=230–530, safe from walls.
+
+**Post-boss respawn:** After `bossDefeated`, player respawns at `x=354, y=-2234` (near chai cup area).
