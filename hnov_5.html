@@ -957,14 +957,15 @@ function resetBoss() {
 
 function _bossStartCreature(b) {
   const pattern = Math.floor(Math.random() * 4);
+  const gapStart = Math.floor(Math.random() * 11); // random gap: indices gapStart and gapStart+1
   b.creatures = [];
   for (let i = 0; i < 12; i++) {
     let vx, startX;
-    if (pattern === 0) { // all right→left; skip middle two (indices 5,6) to leave a gap
-      if (i === 5 || i === 6) continue;
+    if (pattern === 0) { // all right→left; random two-creature gap
+      if (i === gapStart || i === gapStart + 1) continue;
       vx = -CREATURE_SPEED; startX = LW;
-    } else if (pattern === 1) { // all left→right; skip middle two (indices 5,6) to leave a gap
-      if (i === 5 || i === 6) continue;
+    } else if (pattern === 1) { // all left→right; random two-creature gap
+      if (i === gapStart || i === gapStart + 1) continue;
       vx = CREATURE_SPEED; startX = -CREATURE_W;
     } else if (pattern === 2) { // top 6 left→right, bottom 6 right→left
       if (i < 6) { vx = CREATURE_SPEED; startX = -CREATURE_W; }
