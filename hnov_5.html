@@ -483,8 +483,10 @@ let lbTitleLoading = false;
 // — boss fight —
 const BOSS_TRIGGER_Y = -2300; // player.y threshold that triggers boss intro
 const BOSS_SPAWN_X = 380, BOSS_SPAWN_Y = -2525;
-const CREATURE_YS = [-2580, -2532, -2484, -2436, -2388, -2340, -2260, -2212, -2164, -2116, -2068, -2020]; // top 6, bottom 6 (48-unit spacing, 80-unit gap)
-const CREATURE_W = 17, CREATURE_H = 6, CREATURE_SPEED = 0.75;
+const CREATURE_W = 17, CREATURE_H = 6, CREATURE_SPEED = 0.375;
+const CREATURE_Y_MIN = -2580, CREATURE_Y_MAX = -2020; // world-y range for side-to-side and circle attacks
+const CREATURE_CIRCLE_RADIUS = 35, CREATURE_CIRCLE_SPD_X = 1.5, CREATURE_CIRCLE_SPD_Y = 0.4, CREATURE_CIRCLE_ROT = 0.055;
+const CREATURE_RAIN_SPD = 1.5; // rain falls faster — longer vertical distance
 const bossData = {
   x: BOSS_SPAWN_X, y: BOSS_SPAWN_Y, w: 40, h: 40,
   spawnX: BOSS_SPAWN_X, spawnY: BOSS_SPAWN_Y,
@@ -949,24 +951,40 @@ function resetBoss() {
 }
 
 function _bossStartCreature(b) {
-  const pattern = Math.floor(Math.random() * 4);
-  const gapStart = Math.floor(Math.random() * 11); // random gap: indices gapStart and gapStart+1
-  for (let i = 0; i < 12; i++) {
-    let vx, startX;
-    if (pattern === 0) { // all right→left; random two-creature gap
-      if (i === gapStart || i === gapStart + 1) continue;
-      vx = -CREATURE_SPEED; startX = LW;
-    } else if (pattern === 1) { // all left→right; random two-creature gap
-      if (i === gapStart || i === gapStart + 1) continue;
-      vx = CREATURE_SPEED; startX = -CREATURE_W;
-    } else if (pattern === 2) { // top 6 left→right, bottom 6 right→left
-      if (i < 6) { vx = CREATURE_SPEED; startX = -CREATURE_W; }
-      else        { vx = -CREATURE_SPEED; startX = LW; }
-    } else { // top 6 right→left, bottom 6 left→right
-      if (i < 6) { vx = -CREATURE_SPEED; startX = LW; }
-      else        { vx = CREATURE_SPEED; startX = -CREATURE_W; }
+  const pattern = Math.floor(Math.random() * 4); // 0=right→left, 1=left→right, 2=spinning circle, 3=rain
+  if (pattern === 0 || pattern === 1) {
+    // Side-to-side: 4 creatures at same random y, travelling side by side
+    const y = CREATURE_Y_MIN + Math.random() * (CREATURE_Y_MAX - CREATURE_Y_MIN);
+    const goLeft = pattern === 0;
+    const vx = goLeft ? -CREATURE_SPEED : CREATURE_SPEED;
+    const spacing = 25; // horizontal gap between creatures in the row
+    for (let i = 0; i < 4; i++) {
+      const startX = goLeft ? LW + i * spacing : -CREATURE_W - i * spacing;
+      b.creatures.push({ x: startX, y, vx });
     }
-    b.creatures.push({ x: startX, y: CREATURE_YS[i], vx });
+  } else if (pattern === 2) {
+    // Diagonal spinning circle: 4 creatures rotating around a moving centre
+    const goLeft = Math.random() < 0.5;
+    const cvx = goLeft ? -CREATURE_CIRCLE_SPD_X : CREATURE_CIRCLE_SPD_X;
+    const cvy = (Math.random() < 0.5 ? 1 : -1) * CREATURE_CIRCLE_SPD_Y;
+    const startCx = goLeft ? LW + CREATURE_CIRCLE_RADIUS : -CREATURE_CIRCLE_RADIUS;
+    const startCy = CREATURE_Y_MIN + Math.random() * (CREATURE_Y_MAX - CREATURE_Y_MIN);
+    for (let i = 0; i < 4; i++) {
+      b.creatures.push({ type: 'circle', cx: startCx, cy: startCy, cvx, cvy,
+        angle: 0, phaseOffset: i * Math.PI / 2, radius: CREATURE_CIRCLE_RADIUS, x: 0, y: 0 });
+    }
+  } else {
+    // Top-down rain: pick 4 of 12 horizontal slots, drop one creature per slot
+    const slots = Array.from({ length: 12 }, (_, i) => i);
+    for (let i = 11; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [slots[i], slots[j]] = [slots[j], slots[i]];
+    }
+    const slotW = LW / 12;
+    for (let i = 0; i < 4; i++) {
+      const x = slots[i] * slotW + slotW / 2 - CREATURE_W / 2;
+      b.creatures.push({ type: 'rain', x, y: -2750, vy: CREATURE_RAIN_SPD });
+    }
   }
   b.phase = 'creature';
   b.isFirstMove = false;
@@ -1000,10 +1018,20 @@ function updateBoss() {
     b.x = b.spawnX + Math.sin(b.driftAngle) * 150;
     b.y = b.spawnY;
     b.creatures = b.creatures.filter(cr => {
-      cr.x += cr.vx;
+      if (cr.type === 'circle') {
+        cr.cx += cr.cvx; cr.cy += cr.cvy; cr.angle += CREATURE_CIRCLE_ROT;
+        cr.x = cr.cx + Math.cos(cr.angle + cr.phaseOffset) * cr.radius - CREATURE_W / 2;
+        cr.y = cr.cy + Math.sin(cr.angle + cr.phaseOffset) * cr.radius - CREATURE_H / 2;
+      } else if (cr.type === 'rain') {
+        cr.y += cr.vy;
+      } else {
+        cr.x += cr.vx;
+      }
       if (!player.dead && player.dashTimer === 0 && rectsOverlap(player.x, player.y, player.w, player.h, cr.x, cr.y, CREATURE_W, CREATURE_H)) {
         killPlayer();
       }
+      if (cr.type === 'circle') return cr.cvx < 0 ? cr.cx + cr.radius > 0 : cr.cx - cr.radius < LW;
+      if (cr.type === 'rain') return cr.y < -1800;
       return cr.vx < 0 ? cr.x + CREATURE_W > 16 : cr.x < 824;
     });
     if (--b.phaseTimer <= 0) {
@@ -1020,10 +1048,20 @@ function updateBoss() {
     b.x = b.spawnX + Math.sin(b.driftAngle) * 150;
     b.y = b.spawnY;
     b.creatures = b.creatures.filter(cr => {
-      cr.x += cr.vx;
+      if (cr.type === 'circle') {
+        cr.cx += cr.cvx; cr.cy += cr.cvy; cr.angle += CREATURE_CIRCLE_ROT;
+        cr.x = cr.cx + Math.cos(cr.angle + cr.phaseOffset) * cr.radius - CREATURE_W / 2;
+        cr.y = cr.cy + Math.sin(cr.angle + cr.phaseOffset) * cr.radius - CREATURE_H / 2;
+      } else if (cr.type === 'rain') {
+        cr.y += cr.vy;
+      } else {
+        cr.x += cr.vx;
+      }
       if (!player.dead && player.dashTimer === 0 && rectsOverlap(player.x, player.y, player.w, player.h, cr.x, cr.y, CREATURE_W, CREATURE_H)) {
         killPlayer();
       }
+      if (cr.type === 'circle') return cr.cvx < 0 ? cr.cx + cr.radius > 0 : cr.cx - cr.radius < LW;
+      if (cr.type === 'rain') return cr.y < -1800;
       return cr.vx < 0 ? cr.x + CREATURE_W > 16 : cr.x < 824;
     });
     if (b.creatures.length === 0) {

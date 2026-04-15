@@ -847,15 +847,20 @@ Code identifiers (`drawHnov`, `HNOV SPRITE SYSTEM` comment, `// Hnov sprite` com
 - A new move cannot begin while the current one is active.
 
 **Creature system:**
-- Constants: `CREATURE_YS = [-2580,-2564,-2548,-2532,-2516,-2500,-2420,-2404,-2388,-2372,-2356,-2340]` (top 6, bottom 6 with ~80-unit gap), `CREATURE_W=17, CREATURE_H=6, CREATURE_SPEED=3`
-- Each creature: `{x, y, vx}` — no height/width stored at runtime (constants used directly)
-- Despawn condition: `vx < 0` → despawn when `x + CREATURE_W < 16`; `vx > 0` → despawn when `x > 824`
-- 4 patterns (chosen randomly with equal probability):
-  1. All 6 from right → left
-  2. All 6 from left → right
-  3. Top 3 left→right, bottom 3 right→left
-  4. Top 3 right→left, bottom 3 left→right
+- Constants: `CREATURE_W=17, CREATURE_H=6, CREATURE_SPEED=0.375`; `CREATURE_Y_MIN=-2580, CREATURE_Y_MAX=-2020` (random y range for side-to-side and circle); `CREATURE_CIRCLE_RADIUS=35, CREATURE_CIRCLE_SPD_X=1.5, CREATURE_CIRCLE_SPD_Y=0.4, CREATURE_CIRCLE_ROT=0.055`; `CREATURE_RAIN_SPD=1.5`
 - `_bossStartCreature(b)` helper spawns creatures and sets `phase = 'creature'`
+- 4 move patterns chosen with equal probability (25% each):
+
+**Pattern 0 — Side right→left:** 4 creatures at the same randomly chosen y, entering from the right edge spaced 25px apart, all moving left at `CREATURE_SPEED`. Each creature: `{x, y, vx}`.
+
+**Pattern 1 — Side left→right:** Same as pattern 0 but entering from the left, moving right.
+
+**Pattern 2 — Diagonal spinning circle:** 4 creatures arranged at 90° intervals around a centre point (`phaseOffset: i * PI/2`). The centre enters from left or right edge diagonally (random horizontal + ±vertical direction). Each creature stores `{type:'circle', cx, cy, cvx, cvy, angle, phaseOffset, radius, x, y}`. Every frame: `cx += cvx; cy += cvy; angle += CREATURE_CIRCLE_ROT`; then `x/y` computed from the updated angle + phaseOffset. Despawn when centre exits the opposite side.
+
+**Pattern 3 — Top-down rain:** Canvas width (LW=840) divided into 12 slots. 4 of 12 slots chosen via Fisher-Yates shuffle. One creature drops from world y=−2750 per chosen slot, falling at `CREATURE_RAIN_SPD`. Each creature: `{type:'rain', x, y, vy}`. Despawn at `y > -1800`.
+
+- Dash immunity: `player.dashTimer > 0` skips all creature collision checks (unchanged)
+- Despawn per type: standard `vx<0 → x+W>16`, `vx>0 → x<824`; circle → centre exits opposite side; rain → `y>-1800`
 
 **Damage rules:**
 - Boss HP: 3. Only damaged by spike enemy collision **during a dash**.
