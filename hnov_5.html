@@ -490,7 +490,7 @@ let lbTitleLoading = false;
 // — boss fight —
 const BOSS_TRIGGER_Y = -2300; // player.y threshold that triggers boss intro
 const BOSS_SPAWN_X = 380, BOSS_SPAWN_Y = -2525;
-const CREATURE_YS = [-2580, -2540, -2500, -2420, -2380, -2340]; // top 3, bottom 3
+const CREATURE_YS = [-2580, -2564, -2548, -2532, -2516, -2500, -2420, -2404, -2388, -2372, -2356, -2340]; // top 6, bottom 6
 const CREATURE_W = 17, CREATURE_H = 6, CREATURE_SPEED = 3;
 const bossData = {
   x: BOSS_SPAWN_X, y: BOSS_SPAWN_Y, w: 40, h: 40,
@@ -958,17 +958,17 @@ function resetBoss() {
 function _bossStartCreature(b) {
   const pattern = Math.floor(Math.random() * 4);
   b.creatures = [];
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 12; i++) {
     let vx, startX;
     if (pattern === 0) { // all right→left
       vx = -CREATURE_SPEED; startX = LW;
     } else if (pattern === 1) { // all left→right
       vx = CREATURE_SPEED; startX = -CREATURE_W;
-    } else if (pattern === 2) { // top 3 left→right, bottom 3 right→left
-      if (i < 3) { vx = CREATURE_SPEED; startX = -CREATURE_W; }
+    } else if (pattern === 2) { // top 6 left→right, bottom 6 right→left
+      if (i < 6) { vx = CREATURE_SPEED; startX = -CREATURE_W; }
       else        { vx = -CREATURE_SPEED; startX = LW; }
-    } else { // top 3 right→left, bottom 3 left→right
-      if (i < 3) { vx = -CREATURE_SPEED; startX = LW; }
+    } else { // top 6 right→left, bottom 6 left→right
+      if (i < 6) { vx = -CREATURE_SPEED; startX = LW; }
       else        { vx = CREATURE_SPEED; startX = -CREATURE_W; }
     }
     b.creatures.push({ x: startX, y: CREATURE_YS[i], vx });

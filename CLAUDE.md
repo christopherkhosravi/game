@@ -847,7 +847,7 @@ Code identifiers (`drawHnov`, `HNOV SPRITE SYSTEM` comment, `// Hnov sprite` com
 - A new move cannot begin while the current one is active.
 
 **Creature system:**
-- Constants: `CREATURE_YS = [-2580,-2540,-2500,-2420,-2380,-2340]` (top 3, bottom 3 with ~80-unit gap), `CREATURE_W=17, CREATURE_H=6, CREATURE_SPEED=3`
+- Constants: `CREATURE_YS = [-2580,-2564,-2548,-2532,-2516,-2500,-2420,-2404,-2388,-2372,-2356,-2340]` (top 6, bottom 6 with ~80-unit gap), `CREATURE_W=17, CREATURE_H=6, CREATURE_SPEED=3`
 - Each creature: `{x, y, vx}` — no height/width stored at runtime (constants used directly)
 - Despawn condition: `vx < 0` → despawn when `x + CREATURE_W < 16`; `vx > 0` → despawn when `x > 824`
 - 4 patterns (chosen randomly with equal probability):
