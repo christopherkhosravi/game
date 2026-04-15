@@ -490,7 +490,7 @@ let lbTitleLoading = false;
 // — boss fight —
 const BOSS_TRIGGER_Y = -2300; // player.y threshold that triggers boss intro
 const BOSS_SPAWN_X = 380, BOSS_SPAWN_Y = -2525;
-const CREATURE_YS = [-2580, -2564, -2548, -2532, -2516, -2500, -2420, -2404, -2388, -2372, -2356, -2340]; // top 6, bottom 6
+const CREATURE_YS = [-2580, -2532, -2484, -2436, -2388, -2340, -2260, -2212, -2164, -2116, -2068, -2020]; // top 6, bottom 6 (48-unit spacing, 80-unit gap)
 const CREATURE_W = 17, CREATURE_H = 6, CREATURE_SPEED = 3;
 const bossData = {
   x: BOSS_SPAWN_X, y: BOSS_SPAWN_Y, w: 40, h: 40,
@@ -2322,6 +2322,16 @@ function _canvasToWorld(clientX, clientY) {
 canvas.addEventListener('mousedown', e => {
   if (!godMode) return;
   const { wx, wy } = _canvasToWorld(e.clientX, e.clientY);
+  // 0. click on boss → deal 1 damage
+  if (bossActive) {
+    const b = bossData;
+    if (wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h) {
+      b.hp--;
+      spawnParticles(b.x + b.w / 2, b.y + b.h / 2, '#cd4acd', 14, 7, 7, 22);
+      if (b.hp <= 0) { bossActive = false; beginBossCutscene(2); }
+      return;
+    }
+  }
   // 1. click on enemy → remove it
   for (let i = enemies.length - 1; i >= 0; i--) {
     const en = enemies[i];
