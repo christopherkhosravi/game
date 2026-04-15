@@ -1008,7 +1008,7 @@ function updateBoss() {
     b.y = b.spawnY;
     b.creatures = b.creatures.filter(cr => {
       cr.x += cr.vx;
-      if (!player.dead && rectsOverlap(player.x, player.y, player.w, player.h, cr.x, cr.y, CREATURE_W, CREATURE_H)) {
+      if (!player.dead && player.dashTimer === 0 && rectsOverlap(player.x, player.y, player.w, player.h, cr.x, cr.y, CREATURE_W, CREATURE_H)) {
         killPlayer();
       }
       return cr.vx < 0 ? cr.x + CREATURE_W > 16 : cr.x < 824;
@@ -1028,7 +1028,7 @@ function updateBoss() {
     b.y = b.spawnY;
     b.creatures = b.creatures.filter(cr => {
       cr.x += cr.vx;
-      if (!player.dead && rectsOverlap(player.x, player.y, player.w, player.h, cr.x, cr.y, CREATURE_W, CREATURE_H)) {
+      if (!player.dead && player.dashTimer === 0 && rectsOverlap(player.x, player.y, player.w, player.h, cr.x, cr.y, CREATURE_W, CREATURE_H)) {
         killPlayer();
       }
       return cr.vx < 0 ? cr.x + CREATURE_W > 16 : cr.x < 824;
