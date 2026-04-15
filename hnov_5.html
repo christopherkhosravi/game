@@ -1000,6 +1000,7 @@ function updateBoss() {
         b.phase = 'dash'; b.phaseTimer = 300;
       } else {
         _bossStartCreature(b);
+        b.phaseTimer = b.hp >= 3 ? 300 : b.hp === 2 ? 0 : -3;
       }
     }
   } else if (b.phase === 'creature') {
@@ -1013,8 +1014,34 @@ function updateBoss() {
       }
       return cr.vx < 0 ? cr.x + CREATURE_W > 16 : cr.x < 824;
     });
+    if (--b.phaseTimer <= 0) {
+      const doDash = player.y <= -2050 && Math.random() < 0.1;
+      if (doDash) {
+        b.phase = 'dashPending'; // wait for current creatures to clear, then dash
+      } else {
+        _bossStartCreature(b); // spawn next wave immediately, overlapping current
+        b.phaseTimer = b.hp >= 3 ? 300 : b.hp === 2 ? 0 : -3;
+      }
+    }
+  } else if (b.phase === 'dashPending') {
+    b.driftAngle += 0.025;
+    b.x = b.spawnX + Math.sin(b.driftAngle) * 150;
+    b.y = b.spawnY;
+    b.creatures = b.creatures.filter(cr => {
+      cr.x += cr.vx;
+      if (!player.dead && rectsOverlap(player.x, player.y, player.w, player.h, cr.x, cr.y, CREATURE_W, CREATURE_H)) {
+        killPlayer();
+      }
+      return cr.vx < 0 ? cr.x + CREATURE_W > 16 : cr.x < 824;
+    });
     if (b.creatures.length === 0) {
-      b.phase = 'float'; b.phaseTimer = b.hp >= 3 ? 300 : b.hp === 2 ? 0 : -3;
+      const px = player.x + 6, py = player.y + 8;
+      const bx = b.x + b.w / 2, by = b.y + b.h / 2;
+      const dx = px - bx, dy = py - by;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      b.dashVx = dx / dist * 4; b.dashVy = dy / dist * 4;
+      b.dashTargetX = px; b.dashTargetY = py;
+      b.phase = 'dash'; b.phaseTimer = 300;
     }
   } else if (b.phase === 'dash') {
     // stop when close enough to target
