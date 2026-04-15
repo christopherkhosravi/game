@@ -958,7 +958,6 @@ function resetBoss() {
 function _bossStartCreature(b) {
   const pattern = Math.floor(Math.random() * 4);
   const gapStart = Math.floor(Math.random() * 11); // random gap: indices gapStart and gapStart+1
-  b.creatures = [];
   for (let i = 0; i < 12; i++) {
     let vx, startX;
     if (pattern === 0) { // all right→left; random two-creature gap
@@ -1000,7 +999,7 @@ function updateBoss() {
         b.phase = 'dash'; b.phaseTimer = 300;
       } else {
         _bossStartCreature(b);
-        b.phaseTimer = b.hp >= 3 ? 300 : b.hp === 2 ? -300 : -600;
+        b.phaseTimer = b.hp >= 3 ? 561 : b.hp === 2 ? 280 : 187;
       }
     }
   } else if (b.phase === 'creature') {
@@ -1020,7 +1019,7 @@ function updateBoss() {
         b.phase = 'dashPending'; // wait for current creatures to clear, then dash
       } else {
         _bossStartCreature(b); // spawn next wave immediately, overlapping current
-        b.phaseTimer = b.hp >= 3 ? 300 : b.hp === 2 ? -300 : -600;
+        b.phaseTimer = b.hp >= 3 ? 561 : b.hp === 2 ? 280 : 187;
       }
     }
   } else if (b.phase === 'dashPending') {
@@ -1086,7 +1085,7 @@ function updateBoss() {
     b.y += Math.sign(ddy) * Math.min(3, Math.abs(ddy));
     if (--b.phaseTimer <= 0 || Math.abs(ddy) < 3) {
       b.y = b.spawnY;
-      b.phase = 'float'; b.phaseTimer = b.hp >= 3 ? 300 : b.hp === 2 ? -300 : -600;
+      b.phase = 'float'; b.phaseTimer = b.hp >= 3 ? 561 : b.hp === 2 ? 280 : 187;
     }
   }
 
