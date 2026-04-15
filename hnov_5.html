@@ -1013,7 +1013,7 @@ function updateBoss() {
       return cr.vx < 0 ? cr.x + CREATURE_W > 16 : cr.x < 824;
     });
     if (b.creatures.length === 0) {
-      b.phase = 'float'; b.phaseTimer = b.hp >= 3 ? 300 : b.hp === 2 ? 150 : 60;
+      b.phase = 'float'; b.phaseTimer = b.hp >= 3 ? 300 : b.hp === 2 ? 0 : -3;
     }
   } else if (b.phase === 'dash') {
     // stop when close enough to target
@@ -1058,7 +1058,7 @@ function updateBoss() {
     b.y += Math.sign(ddy) * Math.min(3, Math.abs(ddy));
     if (--b.phaseTimer <= 0 || Math.abs(ddy) < 3) {
       b.y = b.spawnY;
-      b.phase = 'float'; b.phaseTimer = b.hp >= 3 ? 300 : b.hp === 2 ? 150 : 60;
+      b.phase = 'float'; b.phaseTimer = b.hp >= 3 ? 300 : b.hp === 2 ? 0 : -3;
     }
   }
 
