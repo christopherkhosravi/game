@@ -829,47 +829,46 @@ Code identifiers (`drawHnov`, `HNOV SPRITE SYSTEM` comment, `// Hnov sprite` com
 - `bossDefeated` — true after boss death cutscene completes; chai cup reappears and win is allowed
 - `bossActive` — true while the boss fight is live (false during cutscenes, false after defeat)
 - `bossDeathPending` — true while the death animation is playing before the cutscene fires; boss rendered but gameplay logic skipped
-- `bossData` — boss entity: `{x,y,w:40,h:40,hp,maxHp,phase,phaseTimer,driftAngle,dashVx,dashVy,dashTargetX,dashTargetY,hitCooldown,creatures[],isFirstMove,animName,animFrame,animT,hurtTimer}`
+- `bossData` — boss entity: `{x,y,w:40,h:40,hp,maxHp,phase,phaseTimer,driftAngle,dashVx,dashVy,dashTargetX,dashTargetY,hitCooldown,creatures[],ambientCreatures[],wavesRemaining,waveTimer,animName,animFrame,animT,hurtTimer}`
 - `bossCsSet` (1=intro, 2=death), `bossCsClip`, `bossCsExiting`, `bossCsExitStart`, `bossCsFadeState`, `bossCsFadeStart`
 - `BOSS_CS2_SUBS` / `BOSS_CS3_SUBS` — subtitle text arrays for each cutscene set
 
-**Boss behavior FSM (`updateBoss()`):**
-- `float` — drifts left/right at `spawnY=-2525` with `sin(driftAngle)*150`. 5-second timer (300 frames), then picks next move.
-- `creature` — 6 small creatures travel across the screen at fixed y positions; move is complete when all 6 have despawned. Touching a creature kills the player instantly.
-- `dash` — moves at speed 4 toward player's position captured at dash start (`dashTargetX/Y`). Stops when it reaches the target or hits a platform, spike, bounds, or timer (300 frames). Spike hit = -1 HP, dash stops; at 0 HP triggers death cutscene.
-- `pause` — 60 frames stationary after dash or creature move ends.
-- `ascend` — returns to `spawnY` at speed 3, then `float`.
+**Boss behavior FSM (`updateBoss()`) — two-phase loop:**
 
-**Move selection:**
-- `isFirstMove = true` on spawn/reset — first action is always a creature attack.
-- If `player.y > -2050`: always creature attack (dash unavailable).
-- If `player.y <= -2050`: 90% creature, 10% dash (chosen randomly).
-- 5-second (300-frame) idle between moves via `phaseTimer`.
-- A new move cannot begin while the current one is active.
+**HOVER PHASE (`hover`)**
+- Boss floats at `y=-2525` with a subtle sway (`BOSS_HOVER_SWAY=10` world units amplitude, `BOSS_HOVER_SWAY_SPD=0.02`)
+- `BOSS_AMBIENT_N=3` decorative crow creatures orbit the boss at `BOSS_AMBIENT_RADIUS=40` world units. They rotate at `angle += 0.012` per frame and are drawn at 45% alpha. They do **not** hurt the player.
+- Every `BOSS_WAVE_INTERVAL=240` frames (4 s), one attack wave is launched via `_bossStartCreature(b)`. Attack creatures kill the player on contact (unless player is dashing).
+- Wave count before transitioning scales with HP: 3 HP → 3 waves, 2 HP → 6 waves, 1 HP → 12 waves (`wavesRemaining` field).
+- When `wavesRemaining === 0` and all attack creatures have despawned → ambient creatures are given outward fly-off velocity (speed 8) → transition to `hover_clearambient`.
 
-**Creature system:**
-- Constants: `CREATURE_W=17, CREATURE_H=6, CREATURE_SPEED=0.375`; `CREATURE_Y_MIN=-2580, CREATURE_Y_MAX=-2020` (random y range for side-to-side and circle); `CREATURE_CIRCLE_RADIUS=35, CREATURE_CIRCLE_SPD_X=1.5, CREATURE_CIRCLE_SPD_Y=0.4, CREATURE_CIRCLE_ROT=0.055`; `CREATURE_RAIN_SPD=1.5`
-- `_bossStartCreature(b)` helper spawns creatures and sets `phase = 'creature'`
-- 4 move patterns chosen with equal probability (25% each):
+**`hover_clearambient`**
+- Ambient creatures move at their fly-off velocity until all exit the screen bounds (`x < -60 || x > LW+60 || y < -2860 || y > -2100`). Then → `dashDrift`.
 
-**Pattern 0 — Side right→left:** 4 creatures at the same randomly chosen y, entering from the right edge spaced 25px apart, all moving left at `CREATURE_SPEED`. Each creature: `{x, y, vx}`.
+**DASH PHASE (`dashDrift` → `dash` → `pause` → `ascend`)**
+- `dashDrift` — boss resumes full ±150 sine drift for `BOSS_DASH_DRIFT_DUR=240` frames (4 s). Animation plays `attack` clip to telegraph the incoming dash.
+- `dash` — locks onto player's position at the moment drift ends and dashes at speed 4. Stops when: within 4 units of target, hits a floating platform, hits wall/floor/ceiling bounds, or 300-frame timeout.
+- Only damageable during `dash`: spike enemy collision deals −1 HP, `hitCooldown=45` prevents multi-hit. At 0 HP → `bossDeathPending = true`.
+- `pause` — 60 frames stationary.
+- `ascend` — returns to `spawnY` at speed 3 using the subtle sway target. When within 3 y-units of target or 200-frame timeout → `hover` (fresh `wavesRemaining`, fresh `waveTimer`, fresh `ambientCreatures`).
 
-**Pattern 1 — Side left→right:** Same as pattern 0 but entering from the left, moving right.
+**Attack wave patterns — 3 patterns, equal probability (33% each):**
 
-**Pattern 2 — Diagonal spinning circle:** 4 creatures arranged at 90° intervals around a centre point (`phaseOffset: i * PI/2`). The centre enters from left or right edge diagonally (random horizontal + ±vertical direction). Each creature stores `{type:'circle', cx, cy, cvx, cvy, angle, phaseOffset, radius, x, y}`. Every frame: `cx += cvx; cy += cvy; angle += CREATURE_CIRCLE_ROT`; then `x/y` computed from the updated angle + phaseOffset. Despawn when centre exits the opposite side.
+**Pattern 0 — Top-down rain:** LW divided into 12 columns. 4 of 12 chosen via Fisher-Yates shuffle. One crow drops from y=−2750 per chosen column at `CREATURE_RAIN_SPD=1.5`. `{type:'rain', x, y, vy}`. Despawn at `y > -1800`.
 
-**Pattern 3 — Top-down rain:** Canvas width (LW=840) divided into 12 slots. 4 of 12 slots chosen via Fisher-Yates shuffle. One creature drops from world y=−2750 per chosen slot, falling at `CREATURE_RAIN_SPD`. Each creature: `{type:'rain', x, y, vy}`. Despawn at `y > -1800`.
+**Pattern 1 — Wall-to-wall:** `CREATURE_Y_MIN` to `CREATURE_Y_MAX` divided into 12 rows. 4 rows chosen randomly. All 4 crows enter from the same side wall (direction chosen randomly per wave) at `CREATURE_SPEED=0.375`. `{x, y, vx}`. Despawn when past the opposite wall.
 
-- Dash immunity: `player.dashTimer > 0` skips all creature collision checks (unchanged)
-- Despawn per type: standard `vx<0 → x+W>16`, `vx>0 → x<824`; circle → centre exits opposite side; rain → `y>-1800`
+**Pattern 2 — Spinning circle:** 4 crows at 90° intervals around a moving centre (`phaseOffset: i * PI/2`). Centre enters from one side diagonally. `{type:'circle', cx, cy, cvx, cvy, angle, phaseOffset, radius, x, y}`. Despawn when centre exits the opposite side.
+
+**Creature constants:** `CREATURE_W=17, CREATURE_H=6, CREATURE_SPEED=0.375`; `CREATURE_Y_MIN=-2580, CREATURE_Y_MAX=-2020`; `CREATURE_CIRCLE_RADIUS=35, CREATURE_CIRCLE_SPD_X=1.5, CREATURE_CIRCLE_SPD_Y=0.4, CREATURE_CIRCLE_ROT=0.055`; `CREATURE_RAIN_SPD=1.5`.
 
 **Damage rules:**
-- Boss HP: 3. Only damaged by spike enemy collision **during a dash**.
+- Boss HP: 3. Only damaged by spike enemy collision **during a `dash`**.
 - `hitCooldown = 45` prevents multi-hit from the same spike overlap.
-- Boss body contact or creature contact → `killPlayer()`.
+- Boss body contact or attack creature contact → `killPlayer()` (dash immunity applies to creatures).
 - On player death: full encounter resets (`bossTriggered = false`), intro replays on next attempt.
 
-**`killPlayer()` helper:** Sets `p.dead`, `deathPhase`, `gameState = 'dead'`, and `deadOverlayTimer` in one call. Used by `updateBoss()` only; `checkHazards()` keeps its own inline death code unchanged.
+**`killPlayer()` helper:** Guards with `godMode` check — no-ops in god mode. Otherwise sets `p.dead`, `deathPhase`, `gameState = 'dead'`, `deadOverlayTimer`.
 
 **Cutscene system extension (`gameState = 'bosscutscene'`):**
 - `beginBossCutscene(set)` — sets `bossCsSet`, resets clip/fade state, sets `gameState = 'bosscutscene'`, plays first video.
@@ -892,7 +891,7 @@ Code identifiers (`drawHnov`, `HNOV SPRITE SYSTEM` comment, `// Hnov sprite` com
 
 **Full restart (R from win/playing):** `startGame()` resets `bossTriggered`, `bossDefeated`, `bossActive`, `bossDeathPending`, and calls `resetBoss()`.
 
-**Rendering (drawWorld(), 2× scaled context):** Boss visible when `bossActive || bossDeathPending`. Drawn as a sprite (80×80 world units, centred on hitbox) from `BOSS_IMGS`. Additive lighter-blend overlay flashes white on hit. Fallback purple rectangle while images load. HP dots hidden during death animation. Creatures drawn as animated crow sprites (20×20 world units) from `CROW_IMGS`.
+**Rendering (drawWorld(), 2× scaled context):** Boss visible when `bossActive || bossDeathPending`. Drawn as a sprite (80×80 world units, centred on hitbox) from `BOSS_IMGS`. Additive lighter-blend overlay flashes white on hit. Fallback purple rectangle while images load. Ambient creatures drawn at 45% alpha; attack creatures at full alpha. Both use `_drawCrow()` helper (inline function in render block) which handles crow sprite, direction flip, shadow, and alpha.
 
 ## Boss & Crow Animation System
 
@@ -913,16 +912,17 @@ Code identifiers (`drawHnov`, `HNOV SPRITE SYSTEM` comment, `// Hnov sprite` com
 
 **Loaders (`BOSS_IMGS`, `CROW_IMGS`):** Placed after KULLAD_IMGS. `BOSS_IMGS` is an object keyed by animation name; each value is an array of Image objects. `CROW_IMGS` is a flat array of 97 Images. Both are included in the LOADING TRACKER image list.
 
-**`updateBossAnim(b)`:** Called at the end of every `updateBoss()` tick. Priority: `bossDeathPending` → death; `hurtTimer > 0` → hurt; else phase map (float/pause/ascend → idle, creature → summon, dashPending → attack, dash → dash). Switches clip immediately on state change (resets frame/tick to 0). Advances frame every 2 game ticks (~30fps playback). Idle uses ping-pong indexing `(N−1)×2` virtual cycle. Death plays once and on the last frame fires `beginBossCutscene(2)` and sets `bossDeathPending = false; bossActive = false`. Hurt plays once and holds last frame until `hurtTimer` expires.
+**`updateBossAnim(b)`:** Called at the end of every `updateBoss()` tick. Priority: `bossDeathPending` → death; `hurtTimer > 0` → hurt; `hover` with active creatures → summon; else phase map. Switches clip immediately on state change (resets frame/tick to 0). Advances frame every 2 game ticks (~30fps playback). Idle uses ping-pong indexing `(N−1)×2` virtual cycle. Death plays once and on the last frame fires `beginBossCutscene(2)` and sets `bossDeathPending = false; bossActive = false`. Hurt plays once and holds last frame until `hurtTimer` expires.
 
 **`getBossFrame(b)`:** Returns the current Image for rendering. Idle applies ping-pong formula; all others clamp to last frame.
 
 **State → animation mapping:**
 | Boss phase | Animation |
 |---|---|
-| float, pause, ascend | idle (ping-pong) |
-| creature | summon |
-| dashPending | attack |
+| hover (no attack creatures) | idle (ping-pong) |
+| hover (attack creatures active) | summon |
+| hover_clearambient, pause, ascend | idle |
+| dashDrift | attack (telegraphs incoming dash) |
 | dash | dash (flipped if dashVx < 0) |
 | bossDeathPending | death (play once, then cutscene) |
 | hurtTimer > 0 | hurt (play once) |

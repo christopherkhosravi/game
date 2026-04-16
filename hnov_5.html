@@ -488,20 +488,29 @@ let lbTitleLoading = false;
 const BOSS_TRIGGER_Y = -2300; // player.y threshold that triggers boss intro
 const BOSS_SPAWN_X = 380, BOSS_SPAWN_Y = -2525;
 const CREATURE_W = 17, CREATURE_H = 6, CREATURE_SPEED = 0.375;
-const CREATURE_Y_MIN = -2580, CREATURE_Y_MAX = -2020; // world-y range for side-to-side and circle attacks
+const CREATURE_Y_MIN = -2580, CREATURE_Y_MAX = -2020; // world-y range for wall-to-wall and circle attacks
 const CREATURE_CIRCLE_RADIUS = 35, CREATURE_CIRCLE_SPD_X = 1.5, CREATURE_CIRCLE_SPD_Y = 0.4, CREATURE_CIRCLE_ROT = 0.055;
-const CREATURE_RAIN_SPD = 1.5; // rain falls faster — longer vertical distance
+const CREATURE_RAIN_SPD = 1.5;
+// — boss phase timing —
+const BOSS_HOVER_SWAY     = 10;   // subtle sway amplitude during hover (world units)
+const BOSS_HOVER_SWAY_SPD = 0.02; // sway oscillation speed
+const BOSS_WAVE_INTERVAL  = 240;  // frames between creature attack waves (4 s at 60 fps)
+const BOSS_DASH_DRIFT_DUR = 240;  // frames of full ±150 sine drift before locking on to player
+const BOSS_AMBIENT_N      = 3;    // number of ambient circling creatures during hover
+const BOSS_AMBIENT_RADIUS = 40;   // orbit radius for ambient creatures (world units)
 const bossData = {
   x: BOSS_SPAWN_X, y: BOSS_SPAWN_Y, w: 40, h: 40,
   spawnX: BOSS_SPAWN_X, spawnY: BOSS_SPAWN_Y,
   hp: 3, maxHp: 3,
-  phase: 'float', // 'float'|'creature'|'dashPending'|'dash'|'pause'|'ascend'
-  phaseTimer: 300,
+  phase: 'hover', // 'hover'|'hover_clearambient'|'dashDrift'|'dash'|'pause'|'ascend'
+  phaseTimer: 0,
   driftAngle: 0,
   dashVx: 0, dashVy: 0, dashTargetX: 0, dashTargetY: 0,
   hitCooldown: 0,
-  creatures: [], // [{x,y,vx}] or {type:'circle',...} or {type:'rain',...}
-  isFirstMove: true,
+  creatures: [],        // active attack-wave creatures (kill player on contact)
+  ambientCreatures: [], // decorative circling creatures (no damage); fly off before dash phase
+  wavesRemaining: 3,    // attack waves left in current hover phase
+  waveTimer: BOSS_WAVE_INTERVAL, // countdown to next wave launch
   // — animation state —
   animName: 'idle', animFrame: 0, animT: 0, hurtTimer: 0,
 };
@@ -976,10 +985,16 @@ function updateBossAnim(b) {
   let target;
   if (bossDeathPending)     { target = 'death'; }
   else if (b.hurtTimer > 0) { b.hurtTimer--; target = 'hurt'; }
-  else {
+  else if (b.phase === 'hover') {
+    // summon while an attack wave is in flight, idle while waiting
+    target = b.creatures.length > 0 ? 'summon' : 'idle';
+  } else {
     const phaseMap = {
-      float: 'idle', pause: 'idle', ascend: 'idle',
-      creature: 'summon', dashPending: 'attack', dash: 'dash',
+      hover_clearambient: 'idle',
+      dashDrift: 'attack', // telegraph incoming dash
+      dash: 'dash',
+      pause: 'idle',
+      ascend: 'idle',
     };
     target = phaseMap[b.phase] || 'idle';
   }
@@ -1022,41 +1037,24 @@ function updateBossAnim(b) {
 function resetBoss() {
   bossData.x = bossData.spawnX; bossData.y = bossData.spawnY;
   bossData.hp = bossData.maxHp;
-  bossData.phase = 'float'; bossData.phaseTimer = 300;
+  bossData.phase = 'hover'; bossData.phaseTimer = 0;
   bossData.driftAngle = 0;
   bossData.dashVx = 0; bossData.dashVy = 0; bossData.dashTargetX = 0; bossData.dashTargetY = 0;
   bossData.hitCooldown = 0;
   bossData.creatures = [];
-  bossData.isFirstMove = true;
+  bossData.wavesRemaining = 3;
+  bossData.waveTimer = BOSS_WAVE_INTERVAL;
+  bossData.ambientCreatures = _makeAmbientCreatures(bossData);
   bossData.animName = 'idle'; bossData.animFrame = 0; bossData.animT = 0; bossData.hurtTimer = 0;
   bossDeathPending = false;
 }
 
+// Spawn one attack-wave batch onto b.creatures (3 patterns, equal probability).
+// Does NOT modify b.phase — caller manages phase transitions.
 function _bossStartCreature(b) {
-  const pattern = Math.floor(Math.random() * 4); // 0=right→left, 1=left→right, 2=spinning circle, 3=rain
-  if (pattern === 0 || pattern === 1) {
-    // Side-to-side: 4 creatures at same random y, travelling side by side
-    const y = CREATURE_Y_MIN + Math.random() * (CREATURE_Y_MAX - CREATURE_Y_MIN);
-    const goLeft = pattern === 0;
-    const vx = goLeft ? -CREATURE_SPEED : CREATURE_SPEED;
-    const spacing = 25; // horizontal gap between creatures in the row
-    for (let i = 0; i < 4; i++) {
-      const startX = goLeft ? LW + i * spacing : -CREATURE_W - i * spacing;
-      b.creatures.push({ x: startX, y, vx });
-    }
-  } else if (pattern === 2) {
-    // Diagonal spinning circle: 4 creatures rotating around a moving centre
-    const goLeft = Math.random() < 0.5;
-    const cvx = goLeft ? -CREATURE_CIRCLE_SPD_X : CREATURE_CIRCLE_SPD_X;
-    const cvy = (Math.random() < 0.5 ? 1 : -1) * CREATURE_CIRCLE_SPD_Y;
-    const startCx = goLeft ? LW + CREATURE_CIRCLE_RADIUS : -CREATURE_CIRCLE_RADIUS;
-    const startCy = CREATURE_Y_MIN + Math.random() * (CREATURE_Y_MAX - CREATURE_Y_MIN);
-    for (let i = 0; i < 4; i++) {
-      b.creatures.push({ type: 'circle', cx: startCx, cy: startCy, cvx, cvy,
-        angle: 0, phaseOffset: i * Math.PI / 2, radius: CREATURE_CIRCLE_RADIUS, x: 0, y: 0 });
-    }
-  } else {
-    // Top-down rain: pick 4 of 12 horizontal slots, drop one creature per slot
+  const pattern = Math.floor(Math.random() * 3); // 0=rain, 1=wall-to-wall, 2=spinning circle
+  if (pattern === 0) {
+    // Top-down rain: pick 4 of 12 horizontal columns, drop one crow per column
     const slots = Array.from({ length: 12 }, (_, i) => i);
     for (let i = 11; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -1067,9 +1065,48 @@ function _bossStartCreature(b) {
       const x = slots[i] * slotW + slotW / 2 - CREATURE_W / 2;
       b.creatures.push({ type: 'rain', x, y: -2750, vy: CREATURE_RAIN_SPD });
     }
+  } else if (pattern === 1) {
+    // Wall-to-wall: pick 4 of 12 rows, crows enter from one side and fly across
+    const slots = Array.from({ length: 12 }, (_, i) => i);
+    for (let i = 11; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [slots[i], slots[j]] = [slots[j], slots[i]];
+    }
+    const goLeft = Math.random() < 0.5;
+    const vx = goLeft ? -CREATURE_SPEED : CREATURE_SPEED;
+    const rowH = (CREATURE_Y_MAX - CREATURE_Y_MIN) / 12;
+    for (let i = 0; i < 4; i++) {
+      const y = CREATURE_Y_MIN + slots[i] * rowH + rowH / 2 - CREATURE_H / 2;
+      const startX = goLeft ? LW + CREATURE_W : -CREATURE_W * 2;
+      b.creatures.push({ x: startX, y, vx });
+    }
+  } else {
+    // Diagonal spinning circle: 4 crows rotating around a moving centre
+    const goLeft = Math.random() < 0.5;
+    const cvx = goLeft ? -CREATURE_CIRCLE_SPD_X : CREATURE_CIRCLE_SPD_X;
+    const cvy = (Math.random() < 0.5 ? 1 : -1) * CREATURE_CIRCLE_SPD_Y;
+    const startCx = goLeft ? LW + CREATURE_CIRCLE_RADIUS : -CREATURE_CIRCLE_RADIUS;
+    const startCy = CREATURE_Y_MIN + Math.random() * (CREATURE_Y_MAX - CREATURE_Y_MIN);
+    for (let i = 0; i < 4; i++) {
+      b.creatures.push({ type: 'circle', cx: startCx, cy: startCy, cvx, cvy,
+        angle: 0, phaseOffset: i * Math.PI / 2, radius: CREATURE_CIRCLE_RADIUS, x: 0, y: 0 });
+    }
   }
-  b.phase = 'creature';
-  b.isFirstMove = false;
+}
+
+// Create BOSS_AMBIENT_N decorative creatures evenly spaced around the boss.
+function _makeAmbientCreatures(b) {
+  const result = [];
+  for (let i = 0; i < BOSS_AMBIENT_N; i++) {
+    result.push({
+      type: 'ambient',
+      angle: (i / BOSS_AMBIENT_N) * Math.PI * 2,
+      radius: BOSS_AMBIENT_RADIUS,
+      x: 0, y: 0, // computed each frame from boss centre + angle
+      vx: 0, vy: 0, // used only during fly-off (hover_clearambient)
+    });
+  }
+  return result;
 }
 
 function updateBoss() {
@@ -1078,77 +1115,80 @@ function updateBoss() {
   if (bossDeathPending) { updateBossAnim(b); return; }
   if (b.hitCooldown > 0) b.hitCooldown--;
 
-  if (b.phase === 'float') {
-    b.driftAngle += 0.025;
-    b.x = b.spawnX + Math.sin(b.driftAngle) * 150;
-    b.y = b.spawnY;
-    if (--b.phaseTimer <= 0) {
-      const doDash = !b.isFirstMove && player.y <= -2050 && Math.random() < 0.1;
-      if (doDash) {
-        const px = player.x + 6, py = player.y + 8;
-        const bx = b.x + b.w / 2, by = b.y + b.h / 2;
-        const dx = px - bx, dy = py - by;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        b.dashVx = dx / dist * 4; b.dashVy = dy / dist * 4;
-        b.dashTargetX = px; b.dashTargetY = py;
-        b.phase = 'dash'; b.phaseTimer = 300;
+  // Helper: update and filter one batch of attack-wave creatures (kills player on contact)
+  function _tickCreatures() {
+    b.creatures = b.creatures.filter(cr => {
+      if (cr.type === 'circle') {
+        cr.cx += cr.cvx; cr.cy += cr.cvy; cr.angle += CREATURE_CIRCLE_ROT;
+        cr.x = cr.cx + Math.cos(cr.angle + cr.phaseOffset) * cr.radius - CREATURE_W / 2;
+        cr.y = cr.cy + Math.sin(cr.angle + cr.phaseOffset) * cr.radius - CREATURE_H / 2;
+      } else if (cr.type === 'rain') {
+        cr.y += cr.vy;
       } else {
+        cr.x += cr.vx;
+      }
+      if (!player.dead && player.dashTimer === 0 &&
+          rectsOverlap(player.x, player.y, player.w, player.h, cr.x, cr.y, CREATURE_W, CREATURE_H)) {
+        killPlayer();
+      }
+      if (cr.type === 'circle') return cr.cvx < 0 ? cr.cx + cr.radius > 0 : cr.cx - cr.radius < LW;
+      if (cr.type === 'rain') return cr.y < -1800;
+      return cr.vx < 0 ? cr.x + CREATURE_W > 16 : cr.x < 824;
+    });
+  }
+
+  if (b.phase === 'hover') {
+    // Subtle sway — small amplitude, boss stays near centre
+    b.driftAngle += BOSS_HOVER_SWAY_SPD;
+    b.x = b.spawnX + Math.sin(b.driftAngle) * BOSS_HOVER_SWAY;
+    b.y = b.spawnY;
+
+    // Ambient creatures orbit the boss slowly (decorative, no damage)
+    for (const ac of b.ambientCreatures) {
+      ac.angle += 0.012;
+      ac.x = b.x + b.w / 2 + Math.cos(ac.angle) * ac.radius - CREATURE_W / 2;
+      ac.y = b.y + b.h / 2 + Math.sin(ac.angle) * ac.radius - CREATURE_H / 2;
+    }
+
+    // Tick any in-flight attack creatures
+    _tickCreatures();
+
+    // Wave timer: launch the next wave every BOSS_WAVE_INTERVAL frames
+    if (b.wavesRemaining > 0) {
+      if (--b.waveTimer <= 0) {
         _bossStartCreature(b);
-        b.phaseTimer = b.hp >= 3 ? 561 : b.hp === 2 ? 280 : 187;
+        b.wavesRemaining--;
+        b.waveTimer = BOSS_WAVE_INTERVAL;
       }
+    } else if (b.creatures.length === 0) {
+      // All waves fired and last creatures cleared — scatter ambient creatures off-screen
+      for (const ac of b.ambientCreatures) {
+        const dx = ac.x - (b.x + b.w / 2);
+        const dy = ac.y - (b.y + b.h / 2);
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        ac.vx = dx / dist * 8;
+        ac.vy = dy / dist * 8;
+      }
+      b.phase = 'hover_clearambient';
     }
-  } else if (b.phase === 'creature') {
+
+  } else if (b.phase === 'hover_clearambient') {
+    // Move ambient creatures off screen at their fly-off velocity
+    b.ambientCreatures = b.ambientCreatures.filter(ac => {
+      ac.x += ac.vx; ac.y += ac.vy;
+      return ac.x > -60 && ac.x < LW + 60 && ac.y > -2860 && ac.y < -2100;
+    });
+    if (b.ambientCreatures.length === 0) {
+      // All ambient creatures gone — begin the dash drift
+      b.phase = 'dashDrift'; b.phaseTimer = BOSS_DASH_DRIFT_DUR;
+    }
+
+  } else if (b.phase === 'dashDrift') {
+    // Full ±150 sine drift for BOSS_DASH_DRIFT_DUR frames, then lock on and dash
     b.driftAngle += 0.025;
     b.x = b.spawnX + Math.sin(b.driftAngle) * 150;
     b.y = b.spawnY;
-    b.creatures = b.creatures.filter(cr => {
-      if (cr.type === 'circle') {
-        cr.cx += cr.cvx; cr.cy += cr.cvy; cr.angle += CREATURE_CIRCLE_ROT;
-        cr.x = cr.cx + Math.cos(cr.angle + cr.phaseOffset) * cr.radius - CREATURE_W / 2;
-        cr.y = cr.cy + Math.sin(cr.angle + cr.phaseOffset) * cr.radius - CREATURE_H / 2;
-      } else if (cr.type === 'rain') {
-        cr.y += cr.vy;
-      } else {
-        cr.x += cr.vx;
-      }
-      if (!player.dead && player.dashTimer === 0 && rectsOverlap(player.x, player.y, player.w, player.h, cr.x, cr.y, CREATURE_W, CREATURE_H)) {
-        killPlayer();
-      }
-      if (cr.type === 'circle') return cr.cvx < 0 ? cr.cx + cr.radius > 0 : cr.cx - cr.radius < LW;
-      if (cr.type === 'rain') return cr.y < -1800;
-      return cr.vx < 0 ? cr.x + CREATURE_W > 16 : cr.x < 824;
-    });
     if (--b.phaseTimer <= 0) {
-      const doDash = player.y <= -2050 && Math.random() < 0.1;
-      if (doDash) {
-        b.phase = 'dashPending'; // wait for current creatures to clear, then dash
-      } else {
-        _bossStartCreature(b); // spawn next wave immediately, overlapping current
-        b.phaseTimer = b.hp >= 3 ? 561 : b.hp === 2 ? 280 : 187;
-      }
-    }
-  } else if (b.phase === 'dashPending') {
-    b.driftAngle += 0.025;
-    b.x = b.spawnX + Math.sin(b.driftAngle) * 150;
-    b.y = b.spawnY;
-    b.creatures = b.creatures.filter(cr => {
-      if (cr.type === 'circle') {
-        cr.cx += cr.cvx; cr.cy += cr.cvy; cr.angle += CREATURE_CIRCLE_ROT;
-        cr.x = cr.cx + Math.cos(cr.angle + cr.phaseOffset) * cr.radius - CREATURE_W / 2;
-        cr.y = cr.cy + Math.sin(cr.angle + cr.phaseOffset) * cr.radius - CREATURE_H / 2;
-      } else if (cr.type === 'rain') {
-        cr.y += cr.vy;
-      } else {
-        cr.x += cr.vx;
-      }
-      if (!player.dead && player.dashTimer === 0 && rectsOverlap(player.x, player.y, player.w, player.h, cr.x, cr.y, CREATURE_W, CREATURE_H)) {
-        killPlayer();
-      }
-      if (cr.type === 'circle') return cr.cvx < 0 ? cr.cx + cr.radius > 0 : cr.cx - cr.radius < LW;
-      if (cr.type === 'rain') return cr.y < -1800;
-      return cr.vx < 0 ? cr.x + CREATURE_W > 16 : cr.x < 824;
-    });
-    if (b.creatures.length === 0) {
       const px = player.x + 6, py = player.y + 8;
       const bx = b.x + b.w / 2, by = b.y + b.h / 2;
       const dx = px - bx, dy = py - by;
@@ -1157,59 +1197,64 @@ function updateBoss() {
       b.dashTargetX = px; b.dashTargetY = py;
       b.phase = 'dash'; b.phaseTimer = 300;
     }
+
   } else if (b.phase === 'dash') {
-    // stop when close enough to target
+    // Move toward locked target at speed 4; stop on arrival, platform hit, or timeout
     const bCx = b.x + b.w / 2, bCy = b.y + b.h / 2;
     const rdx = b.dashTargetX - bCx, rdy = b.dashTargetY - bCy;
     if (Math.sqrt(rdx * rdx + rdy * rdy) <= 4) {
       b.phase = 'pause'; b.phaseTimer = 60;
     } else {
       b.x += b.dashVx; b.y += b.dashVy;
-      // platform collision stops dash
       for (const pl of staticPlats.slice(3)) {
         if (rectsOverlap(b.x, b.y, b.w, b.h, pl.x, pl.y, pl.w, pl.h)) {
           b.phase = 'pause'; b.phaseTimer = 60; break;
         }
       }
     }
-    // spike damage (only while still dashing)
+    // Spike damage — only damageable during dash
     if (b.phase === 'dash' && b.hitCooldown <= 0) {
       for (const e of enemies) {
         if (rectsOverlap(b.x, b.y, b.w, b.h, e.x, e.y, e.w, e.h)) {
           b.hp--;
           b.hitCooldown = 45;
-          b.hurtTimer = BOSS_ANIM_COUNTS.hurt * 2; // play hurt anim for its full duration
+          b.hurtTimer = BOSS_ANIM_COUNTS.hurt * 2;
           spawnParticles(b.x + b.w / 2, b.y + b.h / 2, '#cd4acd', 14, 7, 7, 22);
-          if (b.hp <= 0) { bossDeathPending = true; return; } // death anim plays; cutscene fires on completion
+          if (b.hp <= 0) { bossDeathPending = true; return; }
           b.phase = 'pause'; b.phaseTimer = 60;
           break;
         }
       }
     }
-    // bounds / timer fallback
+    // Bounds / timer fallback
     if (b.phase === 'dash' && (--b.phaseTimer <= 0 || b.x < 16 || b.x + b.w > LW - 16 || b.y > GROUND_Y || b.y < -2700)) {
       b.phase = 'pause'; b.phaseTimer = 60;
     }
+
   } else if (b.phase === 'pause') {
     if (--b.phaseTimer <= 0) { b.phase = 'ascend'; b.phaseTimer = 200; }
+
   } else if (b.phase === 'ascend') {
-    b.driftAngle += 0.025;
-    const tx = b.spawnX + Math.sin(b.driftAngle) * 150;
+    // Return to spawn position, then restart hover phase with fresh waves + ambient creatures
+    b.driftAngle += BOSS_HOVER_SWAY_SPD;
+    const tx = b.spawnX + Math.sin(b.driftAngle) * BOSS_HOVER_SWAY;
     const ty = b.spawnY;
     const ddx = tx - b.x, ddy = ty - b.y;
     b.x += Math.sign(ddx) * Math.min(3, Math.abs(ddx));
     b.y += Math.sign(ddy) * Math.min(3, Math.abs(ddy));
     if (--b.phaseTimer <= 0 || Math.abs(ddy) < 3) {
       b.y = b.spawnY;
-      b.phase = 'float'; b.phaseTimer = b.hp >= 3 ? 561 : b.hp === 2 ? 280 : 187;
+      b.phase = 'hover'; b.phaseTimer = 0;
+      b.wavesRemaining = b.hp >= 3 ? 3 : b.hp === 2 ? 6 : 12;
+      b.waveTimer = BOSS_WAVE_INTERVAL;
+      b.ambientCreatures = _makeAmbientCreatures(b);
     }
   }
 
-  // boss body vs player
+  // Boss body contact kills player regardless of phase
   if (!player.dead && rectsOverlap(player.x + 2, player.y + 2, player.w - 4, player.h - 4, b.x, b.y, b.w, b.h)) {
     killPlayer();
   }
-  // advance animation state machine
   updateBossAnim(b);
 }
 
@@ -1703,36 +1748,48 @@ function drawWorld() {
       ctx.fillRect(b.x, b.y, b.w, b.h);
     }
 
-    // Creatures — drawn as animated crow sprites
-    const _cN = CROW_IMGS.length;                        // 97
-    const _cCycle = (_cN - 1) * 2;                       // ping-pong cycle length
-    const _cT = Math.floor(frame * 0.4) % _cCycle;       // ~24fps playback
+    // Crow sprite shared animation (ping-pong, ~24fps)
+    const _cN = CROW_IMGS.length;
+    const _cCycle = (_cN - 1) * 2;
+    const _cT = Math.floor(frame * 0.4) % _cCycle;
     const _cIdx = _cT < _cN ? _cT : _cCycle - _cT;
     const crowFrame = CROW_IMGS[_cIdx];
-    const CWS = 20; // crow sprite draw size (world units, square)
-    ctx.shadowColor = '#ff6b9d';
-    ctx.shadowBlur = 6;
-    for (const cr of b.creatures) {
-      const cdx = cr.x + CREATURE_W / 2 - CWS / 2;
-      const cdy = cr.y + CREATURE_H / 2 - CWS / 2;
+    const CWS = 20; // crow draw size in world units
+
+    // Helper: draw one crow sprite at world position (cdx, cdy), flipped if flyRight
+    function _drawCrow(cdx, cdy, flyRight, alpha) {
+      ctx.globalAlpha = alpha;
+      ctx.shadowColor = '#ff6b9d'; ctx.shadowBlur = 6;
       if (crowFrame && crowFrame.complete && crowFrame.naturalWidth > 0) {
-        // Flip crow to face the direction of travel
-        const flyRight = cr.type === 'circle' ? cr.cvx > 0 : cr.type === 'rain' ? false : cr.vx > 0;
         if (flyRight) {
-          ctx.save();
-          ctx.translate(cdx + CWS, cdy);
-          ctx.scale(-1, 1);
-          ctx.drawImage(crowFrame, 0, 0, CWS, CWS);
-          ctx.restore();
+          ctx.save(); ctx.translate(cdx + CWS, cdy); ctx.scale(-1, 1);
+          ctx.drawImage(crowFrame, 0, 0, CWS, CWS); ctx.restore();
         } else {
           ctx.drawImage(crowFrame, cdx, cdy, CWS, CWS);
         }
       } else {
         ctx.fillStyle = '#ff6b9d';
-        ctx.fillRect(cr.x, cr.y, CREATURE_W, CREATURE_H);
+        ctx.fillRect(cdx, cdy, CREATURE_W, CREATURE_H);
       }
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1;
     }
-    ctx.shadowBlur = 0;
+
+    // Ambient creatures — half-alpha, no player interaction
+    for (const ac of b.ambientCreatures) {
+      const acx = ac.x + CREATURE_W / 2 - CWS / 2;
+      const acy = ac.y + CREATURE_H / 2 - CWS / 2;
+      // face direction: during orbit vx=0 so use sin(angle); during fly-off use vx
+      const acRight = ac.vx !== 0 ? ac.vx > 0 : Math.sin(ac.angle) < 0;
+      _drawCrow(acx, acy, acRight, 0.45);
+    }
+
+    // Attack-wave creatures — full alpha, kill on contact
+    for (const cr of b.creatures) {
+      const cdx = cr.x + CREATURE_W / 2 - CWS / 2;
+      const cdy = cr.y + CREATURE_H / 2 - CWS / 2;
+      const flyRight = cr.type === 'circle' ? cr.cvx > 0 : cr.type === 'rain' ? false : cr.vx > 0;
+      _drawCrow(cdx, cdy, flyRight, 1);
+    }
     ctx.restore();
   }
 
