@@ -1155,33 +1155,46 @@ function updateBoss() {
     _tickCreatures();
 
     // Every BOSS_BURST_INTERVAL frames (4 s), fire N patterns simultaneously:
-    //   3 HP → 3 patterns, 2 HP → 6 patterns, 1 HP → 12 patterns
+    //   3 HP → 2 patterns, 2 HP → 4 patterns, 1 HP → 6 patterns
     if (--b.burstTimer <= 0) {
-      const n = b.hp >= 3 ? 3 : b.hp === 2 ? 6 : 12;
+      const n = b.hp >= 3 ? 2 : b.hp === 2 ? 4 : 6;
       for (let i = 0; i < n; i++) _bossStartCreature(b);
       b.burstTimer = BOSS_BURST_INTERVAL;
     }
 
-    // After 16 s total, transition to dash phase
+    // After 16 s total, scatter all attack creatures away from player, then dash
     if (--b.hoverTimer <= 0) {
+      // Give each attack creature a flee velocity pointing away from the player
+      const px = player.x + 6, py = player.y + 8;
+      for (const cr of b.creatures) {
+        const cx = cr.x + CREATURE_W / 2, cy = cr.y + CREATURE_H / 2;
+        const dx = cx - px, dy = cy - py;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        cr.fleeing = true;
+        cr.vx = dx / dist * 6; cr.vy = dy / dist * 6;
+      }
+      // Scatter ambient creatures away from boss centre
       for (const ac of b.ambientCreatures) {
         const dx = ac.x - (b.x + b.w / 2);
         const dy = ac.y - (b.y + b.h / 2);
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        ac.vx = dx / dist * 8;
-        ac.vy = dy / dist * 8;
+        ac.vx = dx / dist * 8; ac.vy = dy / dist * 8;
       }
       b.phase = 'hover_clearambient';
     }
 
   } else if (b.phase === 'hover_clearambient') {
-    // Move ambient creatures off screen at their fly-off velocity
+    // Tick fleeing attack creatures (no kill, just move and despawn off-screen)
+    b.creatures = b.creatures.filter(cr => {
+      cr.x += cr.vx; cr.y += cr.vy;
+      return cr.x > -80 && cr.x < LW + 80 && cr.y > -2900 && cr.y < -1700;
+    });
+    // Move ambient creatures off screen
     b.ambientCreatures = b.ambientCreatures.filter(ac => {
       ac.x += ac.vx; ac.y += ac.vy;
       return ac.x > -60 && ac.x < LW + 60 && ac.y > -2860 && ac.y < -2100;
     });
-    if (b.ambientCreatures.length === 0) {
-      // All ambient creatures gone — begin the dash drift
+    if (b.ambientCreatures.length === 0 && b.creatures.length === 0) {
       b.phase = 'dashDrift'; b.phaseTimer = BOSS_DASH_DRIFT_DUR;
     }
 
