@@ -986,11 +986,9 @@ function updateBossAnim(b) {
   let target;
   if (bossDeathPending)     { target = 'death'; }
   else if (b.hurtTimer > 0) { b.hurtTimer--; target = 'hurt'; }
-  else if (b.phase === 'hover') {
-    // summon while an attack wave is in flight, idle while waiting
-    target = b.creatures.length > 0 ? 'summon' : 'idle';
-  } else {
+  else {
     const phaseMap = {
+      hover: 'idle',
       hover_clearambient: 'idle',
       dashDrift: 'attack', // telegraph incoming dash
       dash: 'dash',
@@ -1234,6 +1232,7 @@ function updateBoss() {
           b.hp--;
           b.hitCooldown = 45;
           b.hurtTimer = BOSS_ANIM_COUNTS.hurt * 2;
+          if (b.ambientCreatures.length > 0) b.ambientCreatures.pop();
           spawnParticles(b.x + b.w / 2, b.y + b.h / 2, '#cd4acd', 14, 7, 7, 22);
           if (b.hp <= 0) { bossDeathPending = true; return; }
           b.phase = 'pause'; b.phaseTimer = 60;
