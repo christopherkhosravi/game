@@ -494,7 +494,7 @@ const CREATURE_RAIN_SPD = 1.5;
 // — boss phase timing —
 const BOSS_HOVER_SWAY     = 10;   // subtle sway amplitude during hover (world units)
 const BOSS_HOVER_SWAY_SPD = 0.02; // sway oscillation speed
-const BOSS_HOVER_DUR      = 960;  // total hover phase duration (16 s at 60 fps)
+const BOSS_HOVER_DUR      = 1800; // total hover phase duration (30 s at 60 fps)
 const BOSS_BURST_INTERVAL = 240;  // frames between each simultaneous 3-wave burst (4 s)
 const BOSS_DASH_DRIFT_DUR = 240;  // frames of full ±150 sine drift before locking on to player
 const BOSS_AMBIENT_N      = 3;    // number of ambient circling creatures during hover
@@ -1072,7 +1072,7 @@ function _bossStartCreature(b) {
       [slots[i], slots[j]] = [slots[j], slots[i]];
     }
     const goLeft = Math.random() < 0.5;
-    const vx = goLeft ? -CREATURE_SPEED : CREATURE_SPEED;
+    const vx = goLeft ? -CREATURE_SPEED * 2 : CREATURE_SPEED * 2;
     const rowH = (CREATURE_Y_MAX - CREATURE_Y_MIN) / 12;
     for (let i = 0; i < 4; i++) {
       const y = CREATURE_Y_MIN + slots[i] * rowH + rowH / 2 - CREATURE_H / 2;
