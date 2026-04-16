@@ -1701,16 +1701,6 @@ function drawWorld() {
       ctx.fillRect(b.x, b.y, b.w, b.h);
     }
 
-    // HP dots — hidden during death animation
-    if (!bossDeathPending) {
-      const dotW = 10, dotGap = 4;
-      const dotStartX = b.x + (b.w - (b.maxHp * dotW + (b.maxHp - 1) * dotGap)) / 2;
-      for (let i = 0; i < b.maxHp; i++) {
-        ctx.fillStyle = i < b.hp ? '#ff4a4a' : '#3e1a1a';
-        ctx.fillRect(dotStartX + i * (dotW + dotGap), b.y - 12, dotW, 6);
-      }
-    }
-
     // Creatures — drawn as animated crow sprites
     const _cN = CROW_IMGS.length;                        // 97
     const _cCycle = (_cN - 1) * 2;                       // ping-pong cycle length
