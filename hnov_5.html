@@ -1296,16 +1296,21 @@ function respawn() {
 function r(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(Math.round(x),Math.round(y),w,h); }
 
 // Per-state sprite definitions: folder, frame count, loop or play-once
+// yOff: world-unit shift applied to the sprite draw position so visible feet
+//        align with the hitbox bottom. Computed as (80 - feet_world_from_top).
+//        Ground states add extra sink (~4 px) so the sprite sits into the floor.
+// frameStart/frameLen: sub-range into the preloaded SPRITE_IMGS array for states
+//        that share a folder (jump vs fall both use animations/transparent/jump/).
 const SPRITE_DEFS = {
-  idle:   { folder: 'idle',      frames: 4, loop: true  },
-  run:    { folder: 'run',       frames: 3, loop: true  },
-  jump:   { folder: 'jump',      frames: 4, loop: true  },
-  fall:   { folder: 'jump',      frames: 4, loop: true  },
-  float:  { folder: 'dead hang', frames: 1, loop: true  },
-  bounce: { folder: 'bounce',    frames: 2, loop: true, firstFrame: 2 },
-  wall:   { folder: 'wall grab', frames: 1, loop: true, scale: 0.85 },
-  dash:   { folder: 'dash',      frames: 2, loop: true  },
-  dying:  { folder: 'dying',     frames: 4, loop: false },
+  idle:   { folder: 'idle',      frames: 4, loop: true,  yOff: 8  },
+  run:    { folder: 'run',       frames: 3, loop: true,  yOff: 8  },
+  jump:   { folder: 'jump',      frames: 4, loop: true,  yOff: 33, frameStart: 0, frameLen: 2 },
+  fall:   { folder: 'jump',      loop: true,             yOff: 4,  frameStart: 2, frameLen: 2 },
+  float:  { folder: 'dead hang', frames: 1, loop: true,  yOff: 3  },
+  bounce: { folder: 'bounce',    frames: 2, loop: true,  yOff: 40, firstFrame: 2 },
+  wall:   { folder: 'wall grab', frames: 1, loop: true,  yOff: 4,  scale: 0.85 },
+  dash:   { folder: 'dash',      frames: 2, loop: true,  yOff: 4  },
+  dying:  { folder: 'dying',     frames: 4, loop: false, yOff: 8  },
 };
 
 // Pre-load all PNG frames; keyed by folder name to avoid duplicate loads
@@ -1456,7 +1461,9 @@ const SPRITE_H = 80;
 function drawHnov(wx, wy, facingRight, state, animFrame) {
   const _def = SPRITE_DEFS[state] || SPRITE_DEFS['idle'];
   const _imgs = SPRITE_IMGS[_def.folder];
-  const _frameIdx = animFrame % _imgs.length;
+  const _fStart = _def.frameStart ?? 0;
+  const _fLen   = _def.frameLen   ?? _imgs.length;
+  const _frameIdx = _fStart + (animFrame % _fLen);
   const _img = _imgs[_frameIdx];
   if (!_img.complete || !_img.naturalWidth) return;
 
@@ -1464,10 +1471,8 @@ function drawHnov(wx, wy, facingRight, state, animFrame) {
   const feetX = wx + 6;   // hitbox centre-x (w=12)
   const feetY = wy + 24;  // hitbox bottom   (h=24)
 
-  const groundStates = ['idle', 'run', 'dying', 'dash'];
-  const yOffset = groundStates.includes(state) ? 8 : 0;
-  const dx = feetX - SPRITE_W / 2;
-  const dy = feetY - SPRITE_H + yOffset;
+  // Per-state yOff shifts sprite so visible feet align with feetY.
+  const yOffset = _def.yOff ?? 0;
 
   ctx.save();
 
@@ -1482,7 +1487,6 @@ function drawHnov(wx, wy, facingRight, state, animFrame) {
   const _scale = _def.scale ?? 1;
   const _sw = SPRITE_W * _scale, _sh = SPRITE_H * _scale;
   ctx.drawImage(_img, feetX - _sw / 2, feetY - _sh + yOffset, _sw, _sh);
-
 
   ctx.restore();
 }
@@ -2458,6 +2462,43 @@ function render() {
   }
   if (gameState === 'playing') drawSpawnTimer();
   if (godMode) {
+    // — hitbox overlays —
+    ctx.save();
+    ctx.lineWidth = 2;
+    // player hitbox
+    ctx.strokeStyle = '#ff6b9d';
+    ctx.fillStyle = 'rgba(255,107,157,0.15)';
+    const _phx = (player.x - cam.x) * 2, _phy = (player.y - cam.y) * 2;
+    const _phw = player.w * 2, _phh = player.h * 2;
+    ctx.fillRect(_phx, _phy, _phw, _phh);
+    ctx.strokeRect(_phx, _phy, _phw, _phh);
+    // boss hitbox
+    if (bossActive || bossDeathPending) {
+      const _b = bossData;
+      ctx.strokeStyle = '#ff4444';
+      ctx.fillStyle = 'rgba(255,68,68,0.15)';
+      const _bhx = (_b.x - cam.x) * 2, _bhy = (_b.y - cam.y) * 2;
+      ctx.fillRect(_bhx, _bhy, _b.w * 2, _b.h * 2);
+      ctx.strokeRect(_bhx, _bhy, _b.w * 2, _b.h * 2);
+    }
+    // enemy hitboxes
+    ctx.strokeStyle = '#ffaa00';
+    ctx.fillStyle = 'rgba(255,170,0,0.15)';
+    for (const _e of enemies) {
+      const _ex = (_e.x - cam.x) * 2, _ey = (_e.y - cam.y) * 2;
+      ctx.fillRect(_ex, _ey, _e.w * 2, _e.h * 2);
+      ctx.strokeRect(_ex, _ey, _e.w * 2, _e.h * 2);
+    }
+    // goal hitbox
+    if (!bossTriggered || bossDefeated) {
+      ctx.strokeStyle = '#00ffcc';
+      ctx.fillStyle = 'rgba(0,255,204,0.15)';
+      const _gx = (GOAL.x - cam.x) * 2, _gy = (GOAL.y - cam.y) * 2;
+      ctx.fillRect(_gx, _gy, GOAL.w * 2, GOAL.h * 2);
+      ctx.strokeRect(_gx, _gy, GOAL.w * 2, GOAL.h * 2);
+    }
+    ctx.restore();
+
     ctx.font = 'bold 18px "Courier New"';
     ctx.fillStyle = '#ff6b9d';
     ctx.textAlign = 'right';
