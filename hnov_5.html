@@ -491,17 +491,20 @@ const bossData = {
   x: BOSS_SPAWN_X, y: BOSS_SPAWN_Y, w: 40, h: 40,
   spawnX: BOSS_SPAWN_X, spawnY: BOSS_SPAWN_Y,
   hp: 3, maxHp: 3,
-  phase: 'float', // 'float'|'creature'|'dash'|'pause'|'ascend'
+  phase: 'float', // 'float'|'creature'|'dashPending'|'dash'|'pause'|'ascend'
   phaseTimer: 300,
   driftAngle: 0,
   dashVx: 0, dashVy: 0, dashTargetX: 0, dashTargetY: 0,
   hitCooldown: 0,
-  creatures: [], // [{x,y,vx}]
+  creatures: [], // [{x,y,vx}] or {type:'circle',...} or {type:'rain',...}
   isFirstMove: true,
+  // — animation state —
+  animName: 'idle', animFrame: 0, animT: 0, hurtTimer: 0,
 };
-let bossTriggered = false; // boss intro cutscene has been triggered at least once
-let bossDefeated  = false; // boss dead, chai cup visible, win allowed
-let bossActive    = false; // boss fight currently in progress
+let bossTriggered    = false; // boss intro cutscene has been triggered at least once
+let bossDefeated     = false; // boss dead, chai cup visible, win allowed
+let bossActive       = false; // boss fight currently in progress
+let bossDeathPending = false; // true while death anim plays before cutscene fires
 // — boss cutscene —
 let bossCsSet       = 1;      // 1 = intro, 2 = death
 let bossCsClip      = 1;
@@ -939,6 +942,77 @@ function killPlayer() {
   deathTimer = 0; deathPhase = 'dying'; gameState = 'dead'; deadOverlayTimer = 0;
 }
 
+// — Boss animation helpers ────────────────────────────────────────────────────
+
+// Returns the correct BOSS_IMGS frame Image for bossData's current state.
+// Idle uses ping-pong indexing; all others are direct or clamped.
+function getBossFrame(b) {
+  const imgs = BOSS_IMGS[b.animName];
+  if (!imgs || !imgs.length) return null;
+  const N = imgs.length;
+  let idx;
+  if (b.animName === 'idle') {
+    const cycle = (N - 1) * 2;
+    const t = b.animFrame % cycle;
+    idx = t < N ? t : cycle - t;
+  } else {
+    idx = Math.min(b.animFrame, N - 1);
+  }
+  const img = imgs[idx];
+  return (img && img.complete && img.naturalWidth > 0) ? img : null;
+}
+
+// Advance boss animation one game tick (called every updateBoss frame).
+// Selects the target animation from the boss phase, switches immediately on change,
+// then ticks the frame counter (30fps playback = advance every 2 game ticks).
+function updateBossAnim(b) {
+  // Determine which clip should be playing
+  let target;
+  if (bossDeathPending)     { target = 'death'; }
+  else if (b.hurtTimer > 0) { b.hurtTimer--; target = 'hurt'; }
+  else {
+    const phaseMap = {
+      float: 'idle', pause: 'idle', ascend: 'idle',
+      creature: 'summon', dashPending: 'attack', dash: 'dash',
+    };
+    target = phaseMap[b.phase] || 'idle';
+  }
+
+  // Switch animation immediately on state change, reset to frame 0
+  if (b.animName !== target) {
+    b.animName = target;
+    b.animFrame = 0;
+    b.animT = 0;
+  }
+
+  // Advance frame every 2 game ticks (~30fps playback on 60fps engine)
+  if (++b.animT < 2) return;
+  b.animT = 0;
+  const imgs = BOSS_IMGS[b.animName];
+  if (!imgs) return;
+  const N = imgs.length;
+
+  if (b.animName === 'idle') {
+    // Ping-pong: count up through full (N-1)*2 virtual cycle
+    b.animFrame = (b.animFrame + 1) % ((N - 1) * 2);
+  } else if (b.animName === 'death') {
+    // Play once; on last frame trigger the cutscene
+    if (b.animFrame < N - 1) {
+      b.animFrame++;
+    } else if (bossDeathPending) {
+      bossDeathPending = false;
+      bossActive = false;
+      beginBossCutscene(2);
+    }
+  } else if (b.animName === 'hurt') {
+    // Play once, hold last frame until hurtTimer expires
+    if (b.animFrame < N - 1) b.animFrame++;
+  } else {
+    // Loop all other clips
+    b.animFrame = (b.animFrame + 1) % N;
+  }
+}
+
 function resetBoss() {
   bossData.x = bossData.spawnX; bossData.y = bossData.spawnY;
   bossData.hp = bossData.maxHp;
@@ -948,6 +1022,8 @@ function resetBoss() {
   bossData.hitCooldown = 0;
   bossData.creatures = [];
   bossData.isFirstMove = true;
+  bossData.animName = 'idle'; bossData.animFrame = 0; bossData.animT = 0; bossData.hurtTimer = 0;
+  bossDeathPending = false;
 }
 
 function _bossStartCreature(b) {
@@ -992,6 +1068,8 @@ function _bossStartCreature(b) {
 
 function updateBoss() {
   const b = bossData;
+  // While death animation is playing, skip all gameplay logic
+  if (bossDeathPending) { updateBossAnim(b); return; }
   if (b.hitCooldown > 0) b.hitCooldown--;
 
   if (b.phase === 'float') {
@@ -1094,8 +1172,9 @@ function updateBoss() {
         if (rectsOverlap(b.x, b.y, b.w, b.h, e.x, e.y, e.w, e.h)) {
           b.hp--;
           b.hitCooldown = 45;
+          b.hurtTimer = BOSS_ANIM_COUNTS.hurt * 2; // play hurt anim for its full duration
           spawnParticles(b.x + b.w / 2, b.y + b.h / 2, '#cd4acd', 14, 7, 7, 22);
-          if (b.hp <= 0) { bossActive = false; beginBossCutscene(2); return; }
+          if (b.hp <= 0) { bossDeathPending = true; return; } // death anim plays; cutscene fires on completion
           b.phase = 'pause'; b.phaseTimer = 60;
           break;
         }
@@ -1124,6 +1203,8 @@ function updateBoss() {
   if (!player.dead && rectsOverlap(player.x + 2, player.y + 2, player.w - 4, player.h - 4, b.x, b.y, b.w, b.h)) {
     killPlayer();
   }
+  // advance animation state machine
+  updateBossAnim(b);
 }
 
 function respawn() {
@@ -1242,6 +1323,31 @@ const KULLAD_IMGS = [];
     const img = new Image();
     img.src = `animations/kullad/${i}.png`;
     KULLAD_IMGS.push(img);
+  }
+})();
+
+// Boss animations — frame counts per state
+// idle/attack/hurt/summon: 30fps source; dash/death: 24fps source (all played at ~30fps)
+const BOSS_ANIM_COUNTS = { idle:47, attack:56, dash:97, death:141, hurt:46, summon:91 };
+const BOSS_IMGS = {};
+(function() {
+  for (const [name, n] of Object.entries(BOSS_ANIM_COUNTS)) {
+    BOSS_IMGS[name] = [];
+    for (let i = 1; i <= n; i++) {
+      const img = new Image();
+      img.src = `animations/boss/${name}/${i}.png`;
+      BOSS_IMGS[name].push(img);
+    }
+  }
+})();
+
+// Crow creature animation — 97 RGBA PNGs, ping-pong looped
+const CROW_IMGS = [];
+(function() {
+  for (let i = 1; i <= 97; i++) {
+    const img = new Image();
+    img.src = `animations/crow/${i}.png`;
+    CROW_IMGS.push(img);
   }
 })();
 
@@ -1557,38 +1663,83 @@ function drawWorld() {
   }
 
   // — boss —
-  if (bossActive) {
+  if (bossActive || bossDeathPending) {
     const b = bossData;
     ctx.save();
-    // outer glow aura
-    ctx.shadowColor = '#cd4acd';
-    ctx.shadowBlur = 20;
-    ctx.fillStyle = '#2a0a2a';
-    ctx.fillRect(b.x - 4, b.y - 4, b.w + 8, b.h + 8);
-    // body — flash white briefly after taking a spike hit
-    ctx.fillStyle = (b.hitCooldown > 30 && b.hitCooldown % 6 < 3) ? '#ffffff' : '#cd4acd';
-    ctx.fillRect(b.x, b.y, b.w, b.h);
-    ctx.shadowBlur = 0;
-    // inner detail
-    ctx.fillStyle = '#7a2a7a';
-    ctx.fillRect(b.x + 4, b.y + 4, b.w - 8, b.h - 8);
-    // eyes
-    ctx.fillStyle = '#ff4444';
-    ctx.fillRect(b.x + 6, b.y + 12, 8, 6);
-    ctx.fillRect(b.x + b.w - 14, b.y + 12, 8, 6);
-    // HP dots above boss
-    const dotW = 10, dotGap = 4;
-    const dotStartX = b.x + (b.w - (b.maxHp * dotW + (b.maxHp - 1) * dotGap)) / 2;
-    for (let i = 0; i < b.maxHp; i++) {
-      ctx.fillStyle = i < b.hp ? '#ff4a4a' : '#3e1a1a';
-      ctx.fillRect(dotStartX + i * (dotW + dotGap), b.y - 12, dotW, 6);
+    const BSW = 80, BSH = 80; // sprite draw size in world units (2× hitbox for visual impact)
+    const bsx = b.x + b.w / 2 - BSW / 2;
+    const bsy = b.y + b.h / 2 - BSH / 2;
+    const bossFrame = getBossFrame(b);
+    const isFlash = b.hitCooldown > 30 && b.hitCooldown % 6 < 3;
+
+    if (bossFrame) {
+      ctx.shadowColor = '#cd4acd';
+      ctx.shadowBlur = 20;
+      // For dash, flip horizontally when travelling left
+      if (b.animName === 'dash' && b.dashVx < 0) {
+        ctx.save();
+        ctx.translate(bsx + BSW, bsy);
+        ctx.scale(-1, 1);
+        ctx.drawImage(bossFrame, 0, 0, BSW, BSH);
+        ctx.restore();
+      } else {
+        ctx.drawImage(bossFrame, bsx, bsy, BSW, BSH);
+      }
+      ctx.shadowBlur = 0;
+      // White hit-flash: additive overlay on top of sprite
+      if (isFlash) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.55;
+        ctx.drawImage(bossFrame, bsx, bsy, BSW, BSH);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+      }
+    } else {
+      // Fallback placeholder while frames load
+      ctx.shadowColor = '#cd4acd'; ctx.shadowBlur = 20;
+      ctx.fillStyle = isFlash ? '#ffffff' : '#cd4acd';
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+      ctx.shadowBlur = 0;
     }
-    // creatures
+
+    // HP dots — hidden during death animation
+    if (!bossDeathPending) {
+      const dotW = 10, dotGap = 4;
+      const dotStartX = b.x + (b.w - (b.maxHp * dotW + (b.maxHp - 1) * dotGap)) / 2;
+      for (let i = 0; i < b.maxHp; i++) {
+        ctx.fillStyle = i < b.hp ? '#ff4a4a' : '#3e1a1a';
+        ctx.fillRect(dotStartX + i * (dotW + dotGap), b.y - 12, dotW, 6);
+      }
+    }
+
+    // Creatures — drawn as animated crow sprites
+    const _cN = CROW_IMGS.length;                        // 97
+    const _cCycle = (_cN - 1) * 2;                       // ping-pong cycle length
+    const _cT = Math.floor(frame * 0.4) % _cCycle;       // ~24fps playback
+    const _cIdx = _cT < _cN ? _cT : _cCycle - _cT;
+    const crowFrame = CROW_IMGS[_cIdx];
+    const CWS = 20; // crow sprite draw size (world units, square)
     ctx.shadowColor = '#ff6b9d';
-    ctx.shadowBlur = 8;
-    ctx.fillStyle = '#ff6b9d';
+    ctx.shadowBlur = 6;
     for (const cr of b.creatures) {
-      ctx.fillRect(cr.x, cr.y, CREATURE_W, CREATURE_H);
+      const cdx = cr.x + CREATURE_W / 2 - CWS / 2;
+      const cdy = cr.y + CREATURE_H / 2 - CWS / 2;
+      if (crowFrame && crowFrame.complete && crowFrame.naturalWidth > 0) {
+        // Flip crow to face the direction of travel
+        const flyRight = cr.type === 'circle' ? cr.cvx > 0 : cr.type === 'rain' ? false : cr.vx > 0;
+        if (flyRight) {
+          ctx.save();
+          ctx.translate(cdx + CWS, cdy);
+          ctx.scale(-1, 1);
+          ctx.drawImage(crowFrame, 0, 0, CWS, CWS);
+          ctx.restore();
+        } else {
+          ctx.drawImage(crowFrame, cdx, cdy, CWS, CWS);
+        }
+      } else {
+        ctx.fillStyle = '#ff6b9d';
+        ctx.fillRect(cr.x, cr.y, CREATURE_W, CREATURE_H);
+      }
     }
     ctx.shadowBlur = 0;
     ctx.restore();
@@ -2318,7 +2469,7 @@ function startGame() {
   lbNameEntry = false; lbName = ['A','A','A','A','A']; lbNameSlot = 0;
   lbSubmitting = false; lbSubmittedId = null; lbTitleShow = false;
   // reset boss fight state
-  bossTriggered = false; bossDefeated = false; bossActive = false;
+  bossTriggered = false; bossDefeated = false; bossActive = false; bossDeathPending = false;
   resetBoss();
   document.getElementById('overlay').classList.add('hidden');
 }
@@ -2388,7 +2539,7 @@ canvas.addEventListener('mousedown', e => {
     if (wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h) {
       b.hp--;
       spawnParticles(b.x + b.w / 2, b.y + b.h / 2, '#cd4acd', 14, 7, 7, 22);
-      if (b.hp <= 0) { bossActive = false; beginBossCutscene(2); }
+      if (b.hp <= 0) { b.hurtTimer = 0; bossDeathPending = true; }
       return;
     }
   }
@@ -2524,7 +2675,9 @@ startBgFramePreload();
     BUILDING_IMG, SPIKES_IMG,
     ...Object.values(COUNTDOWN_IMGS),
     ...KULLAD_IMGS,
-    ...Object.values(SPRITE_IMGS).flat()
+    ...Object.values(SPRITE_IMGS).flat(),
+    ...Object.values(BOSS_IMGS).flat(),
+    ...CROW_IMGS
   ];
   const vids = ['cutsceneVid1','cutsceneVid2','cutsceneVid3']
     .map(id => document.getElementById(id));

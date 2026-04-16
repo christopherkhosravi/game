@@ -828,7 +828,8 @@ Code identifiers (`drawHnov`, `HNOV SPRITE SYSTEM` comment, `// Hnov sprite` com
 - `bossTriggered` — true once the intro has fired; prevents re-triggering on respawn
 - `bossDefeated` — true after boss death cutscene completes; chai cup reappears and win is allowed
 - `bossActive` — true while the boss fight is live (false during cutscenes, false after defeat)
-- `bossData` — boss entity: `{x,y,w:40,h:40,hp,maxHp,phase,phaseTimer,driftAngle,dashVx,dashVy,dashTargetX,dashTargetY,hitCooldown,creatures[],isFirstMove}`
+- `bossDeathPending` — true while the death animation is playing before the cutscene fires; boss rendered but gameplay logic skipped
+- `bossData` — boss entity: `{x,y,w:40,h:40,hp,maxHp,phase,phaseTimer,driftAngle,dashVx,dashVy,dashTargetX,dashTargetY,hitCooldown,creatures[],isFirstMove,animName,animFrame,animT,hurtTimer}`
 - `bossCsSet` (1=intro, 2=death), `bossCsClip`, `bossCsExiting`, `bossCsExitStart`, `bossCsFadeState`, `bossCsFadeStart`
 - `BOSS_CS2_SUBS` / `BOSS_CS3_SUBS` — subtitle text arrays for each cutscene set
 
@@ -889,9 +890,48 @@ Code identifiers (`drawHnov`, `HNOV SPRITE SYSTEM` comment, `// Hnov sprite` com
 
 **Chai cup visibility:** Goal is hidden when `bossTriggered && !bossDefeated`. Win check returns early under the same condition.
 
-**Full restart (R from win/playing):** `startGame()` resets `bossTriggered`, `bossDefeated`, `bossActive`, and calls `resetBoss()`.
+**Full restart (R from win/playing):** `startGame()` resets `bossTriggered`, `bossDefeated`, `bossActive`, `bossDeathPending`, and calls `resetBoss()`.
 
-**Rendering (drawWorld(), 2× scaled context):** Boss drawn after particles — purple rectangle with inner detail, red "eyes", HP dots above. Creatures drawn as pink glowing rectangles (`#ff6b9d`, `shadowBlur=8`). Boss flashes white briefly after a spike hit (`hitCooldown > 30 && hitCooldown % 6 < 3`).
+**Rendering (drawWorld(), 2× scaled context):** Boss visible when `bossActive || bossDeathPending`. Drawn as a sprite (80×80 world units, centred on hitbox) from `BOSS_IMGS`. Additive lighter-blend overlay flashes white on hit. Fallback purple rectangle while images load. HP dots hidden during death animation. Creatures drawn as animated crow sprites (20×20 world units) from `CROW_IMGS`.
+
+## Boss & Crow Animation System
+
+**Asset locations:** `animations/boss/{idle,attack,dash,death,hurt,summon}/` (256×256 RGBA PNGs) and `animations/crow/` (128×128 RGBA PNGs).
+
+**Processing:** All frames extracted from `animations/boss mp4s/` using ffmpeg. Background removal: max(R,G,B) threshold (< 25 → transparent, 25–70 → ramp, ≥ 70 → opaque) for all boss videos (black and dark-blue backgrounds); inverted max-channel threshold (160 − max channel) for crow (bright gray background). 1920×1080 source videos cropped to 1080×1080 (columns 420–1499) before resize.
+
+**Frame counts and source fps:**
+| Animation | Frames | Source fps | Source file |
+|---|---|---|---|
+| idle | 47 | 30fps | idle short.mp4 |
+| attack | 56 | 30fps | attack short.mp4 |
+| dash | 97 | 24fps | dash.mp4 |
+| death | 141 | 24fps | death.mp4 |
+| hurt | 46 | 30fps | hurt short.mp4 |
+| summon | 91 | 30fps | summon short.mp4 |
+| crow | 97 | 24fps | crow.mp4 |
+
+**Loaders (`BOSS_IMGS`, `CROW_IMGS`):** Placed after KULLAD_IMGS. `BOSS_IMGS` is an object keyed by animation name; each value is an array of Image objects. `CROW_IMGS` is a flat array of 97 Images. Both are included in the LOADING TRACKER image list.
+
+**`updateBossAnim(b)`:** Called at the end of every `updateBoss()` tick. Priority: `bossDeathPending` → death; `hurtTimer > 0` → hurt; else phase map (float/pause/ascend → idle, creature → summon, dashPending → attack, dash → dash). Switches clip immediately on state change (resets frame/tick to 0). Advances frame every 2 game ticks (~30fps playback). Idle uses ping-pong indexing `(N−1)×2` virtual cycle. Death plays once and on the last frame fires `beginBossCutscene(2)` and sets `bossDeathPending = false; bossActive = false`. Hurt plays once and holds last frame until `hurtTimer` expires.
+
+**`getBossFrame(b)`:** Returns the current Image for rendering. Idle applies ping-pong formula; all others clamp to last frame.
+
+**State → animation mapping:**
+| Boss phase | Animation |
+|---|---|
+| float, pause, ascend | idle (ping-pong) |
+| creature | summon |
+| dashPending | attack |
+| dash | dash (flipped if dashVx < 0) |
+| bossDeathPending | death (play once, then cutscene) |
+| hurtTimer > 0 | hurt (play once) |
+
+**Hurt timer:** Set to `BOSS_ANIM_COUNTS.hurt × 2` (= 92 game ticks) when spike hit lands. `hurtTimer` decrements each tick; when 0, animation returns to phase-based selection.
+
+**Death sequence:** Spike kill or god-mode click sets `bossDeathPending = true` instead of immediately calling `beginBossCutscene(2)`. `updateBossAnim` drives the death animation to completion, then calls the cutscene and clears the flag. During this window `updateBoss()` returns immediately (no physics/collision).
+
+**Crow sprite:** Drawn at 20×20 world units, centred on each creature's hitbox. Uses `frame * 0.4` for timing (~24fps playback). Ping-pong formula applied to the 97 frames. Flipped horizontally when the creature travels right (`cr.vx > 0` for side-to-side, `cr.cvx > 0` for circle; no flip for rain).
 
 **Spawn position:** `BOSS_SPAWN_X=380, BOSS_SPAWN_Y=-2525`. Drift amplitude ±150 world units → boss centre ranges x=230–530, safe from walls.
 
