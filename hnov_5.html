@@ -1142,12 +1142,17 @@ function updateBoss() {
     b.x = b.spawnX + Math.sin(b.driftAngle) * BOSS_HOVER_SWAY;
     b.y = b.spawnY;
 
-    // Ambient creatures orbit the boss slowly (decorative, no damage)
-    for (const ac of b.ambientCreatures) {
+    // Ambient creatures orbit the boss; fleeing ones fly off and despawn
+    b.ambientCreatures = b.ambientCreatures.filter(ac => {
+      if (ac.fleeing) {
+        ac.x += ac.vx; ac.y += ac.vy;
+        return ac.x > -80 && ac.x < LW + 80 && ac.y > -2900 && ac.y < -1700;
+      }
       ac.angle += 0.012;
       ac.x = b.x + b.w / 2 + Math.cos(ac.angle) * ac.radius - CREATURE_W / 2;
       ac.y = b.y + b.h / 2 + Math.sin(ac.angle) * ac.radius - CREATURE_H / 2;
-    }
+      return true;
+    });
 
     // Tick any in-flight attack creatures
     _tickCreatures();
@@ -1232,7 +1237,14 @@ function updateBoss() {
           b.hp--;
           b.hitCooldown = 45;
           b.hurtTimer = BOSS_ANIM_COUNTS.hurt * 2;
-          if (b.ambientCreatures.length > 0) b.ambientCreatures.pop();
+          if (b.ambientCreatures.length > 0) {
+            const ac = b.ambientCreatures.pop();
+            const dx = ac.x - (b.x + b.w / 2), dy = ac.y - (b.y + b.h / 2);
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            ac.vx = dx / dist * 8; ac.vy = dy / dist * 8;
+            b.ambientCreatures.push(ac); // keep in array as fleeing
+            ac.fleeing = true;
+          }
           spawnParticles(b.x + b.w / 2, b.y + b.h / 2, '#cd4acd', 14, 7, 7, 22);
           if (b.hp <= 0) { bossDeathPending = true; return; }
           b.phase = 'pause'; b.phaseTimer = 60;
