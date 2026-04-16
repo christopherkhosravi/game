@@ -494,7 +494,8 @@ const CREATURE_RAIN_SPD = 1.5;
 // — boss phase timing —
 const BOSS_HOVER_SWAY     = 10;   // subtle sway amplitude during hover (world units)
 const BOSS_HOVER_SWAY_SPD = 0.02; // sway oscillation speed
-const BOSS_WAVE_INTERVAL  = 240;  // frames between creature attack waves (4 s at 60 fps)
+const BOSS_HOVER_DUR      = 960;  // total hover phase duration (16 s at 60 fps)
+const BOSS_BURST_INTERVAL = 240;  // frames between each simultaneous 3-wave burst (4 s)
 const BOSS_DASH_DRIFT_DUR = 240;  // frames of full ±150 sine drift before locking on to player
 const BOSS_AMBIENT_N      = 3;    // number of ambient circling creatures during hover
 const BOSS_AMBIENT_RADIUS = 40;   // orbit radius for ambient creatures (world units)
@@ -509,8 +510,8 @@ const bossData = {
   hitCooldown: 0,
   creatures: [],        // active attack-wave creatures (kill player on contact)
   ambientCreatures: [], // decorative circling creatures (no damage); fly off before dash phase
-  wavesRemaining: 3,    // attack waves left in current hover phase
-  waveTimer: BOSS_WAVE_INTERVAL, // countdown to next wave launch
+  hoverTimer: BOSS_HOVER_DUR, // counts down 16s total hover duration
+  burstTimer: 0,              // counts down 4s between bursts (0 = fire burst immediately)
   // — animation state —
   animName: 'idle', animFrame: 0, animT: 0, hurtTimer: 0,
 };
@@ -1042,8 +1043,8 @@ function resetBoss() {
   bossData.dashVx = 0; bossData.dashVy = 0; bossData.dashTargetX = 0; bossData.dashTargetY = 0;
   bossData.hitCooldown = 0;
   bossData.creatures = [];
-  bossData.wavesRemaining = 3;
-  bossData.waveTimer = BOSS_WAVE_INTERVAL;
+  bossData.hoverTimer = BOSS_HOVER_DUR;
+  bossData.burstTimer = 0;
   bossData.ambientCreatures = _makeAmbientCreatures(bossData);
   bossData.animName = 'idle'; bossData.animFrame = 0; bossData.animT = 0; bossData.hurtTimer = 0;
   bossDeathPending = false;
@@ -1153,15 +1154,16 @@ function updateBoss() {
     // Tick any in-flight attack creatures
     _tickCreatures();
 
-    // Wave timer: launch the next wave every BOSS_WAVE_INTERVAL frames
-    if (b.wavesRemaining > 0) {
-      if (--b.waveTimer <= 0) {
-        _bossStartCreature(b);
-        b.wavesRemaining--;
-        b.waveTimer = BOSS_WAVE_INTERVAL;
-      }
-    } else if (b.creatures.length === 0) {
-      // All waves fired and last creatures cleared — scatter ambient creatures off-screen
+    // Every BOSS_BURST_INTERVAL frames (4 s), fire N patterns simultaneously:
+    //   3 HP → 3 patterns, 2 HP → 6 patterns, 1 HP → 12 patterns
+    if (--b.burstTimer <= 0) {
+      const n = b.hp >= 3 ? 3 : b.hp === 2 ? 6 : 12;
+      for (let i = 0; i < n; i++) _bossStartCreature(b);
+      b.burstTimer = BOSS_BURST_INTERVAL;
+    }
+
+    // After 16 s total, transition to dash phase
+    if (--b.hoverTimer <= 0) {
       for (const ac of b.ambientCreatures) {
         const dx = ac.x - (b.x + b.w / 2);
         const dy = ac.y - (b.y + b.h / 2);
@@ -1245,8 +1247,8 @@ function updateBoss() {
     if (--b.phaseTimer <= 0 || Math.abs(ddy) < 3) {
       b.y = b.spawnY;
       b.phase = 'hover'; b.phaseTimer = 0;
-      b.wavesRemaining = b.hp >= 3 ? 3 : b.hp === 2 ? 6 : 12;
-      b.waveTimer = BOSS_WAVE_INTERVAL;
+      b.hoverTimer = BOSS_HOVER_DUR;
+      b.burstTimer = 0; // fire first burst immediately
       b.ambientCreatures = _makeAmbientCreatures(b);
     }
   }
