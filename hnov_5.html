@@ -581,6 +581,8 @@ function update() {
     p.vx = 0; p.vy = 0;
     particles = particles.filter(pt => { pt.x += pt.vx; pt.y += pt.vy; pt.vy += 0.15; pt.vx *= 0.92; pt.life--; return pt.life > 0; });
     if (screenShake > 0) screenShake--;
+    if (bossTriggered && !bossDefeated && !bossActive && player.y < BOSS_TRIGGER_Y) { bossActive = true; resetBoss(); }
+    if (bossActive || bossDeathPending) updateBoss();
     updateCamera();
     return;
   }
@@ -940,7 +942,7 @@ function checkHazards() {
 
 function killPlayer() {
   const p = player;
-  if (p.dead) return;
+  if (p.dead || godMode) return;
   p.dead = true; p.state = 'dying'; p.animFrame = 0; p.animT = 0;
   p.vx = 0; p.vy = 0; p.dashTimer = 0; p.dashGrace = 0;
   deathTimer = 0; deathPhase = 'dying'; gameState = 'dead'; deadOverlayTimer = 0;
