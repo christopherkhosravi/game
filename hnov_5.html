@@ -1673,8 +1673,6 @@ function drawWorld() {
     const isFlash = b.hitCooldown > 30 && b.hitCooldown % 6 < 3;
 
     if (bossFrame) {
-      ctx.shadowColor = '#cd4acd';
-      ctx.shadowBlur = 20;
       // For dash, flip horizontally when travelling left
       if (b.animName === 'dash' && b.dashVx < 0) {
         ctx.save();
@@ -1685,7 +1683,6 @@ function drawWorld() {
       } else {
         ctx.drawImage(bossFrame, bsx, bsy, BSW, BSH);
       }
-      ctx.shadowBlur = 0;
       // White hit-flash: additive overlay on top of sprite
       if (isFlash) {
         ctx.globalCompositeOperation = 'lighter';
@@ -1696,10 +1693,8 @@ function drawWorld() {
       }
     } else {
       // Fallback placeholder while frames load
-      ctx.shadowColor = '#cd4acd'; ctx.shadowBlur = 20;
       ctx.fillStyle = isFlash ? '#ffffff' : '#cd4acd';
       ctx.fillRect(b.x, b.y, b.w, b.h);
-      ctx.shadowBlur = 0;
     }
 
     // HP dots — hidden during death animation
