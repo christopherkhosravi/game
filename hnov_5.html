@@ -238,7 +238,7 @@ const enemies = [
 ];
 
 // goal
-const GOAL = {x:408, y:-2580, w:24, h:60}; // top of world — centred on canvas (LW/2-12=408)
+const GOAL = {x:396, y:-2580, w:48, h:72}; // top of world — centred on canvas (LW/2-24=396)
 
 // quake radius (pushback on enemies)
 const QUAKE_RADIUS = 80;
@@ -270,7 +270,7 @@ const VAR_JUMP_CUT = 0.45;
 // ─── PLAYER ──────────────────────────────────────────────────────────────────
 function makePlayer() {
   return {
-    x:LW/2 - 6, y:GROUND_Y - 16, w:12, h:16,
+    x:LW/2 - 6, y:GROUND_Y - 24, w:12, h:24,
     vx:0, vy:0,
     onGround:false, wasOnGround:false,
     facingRight:true,
@@ -493,8 +493,8 @@ const BOSS_DASH_DRIFT_DUR = 240;  // frames of full ±150 sine drift before lock
 const BOSS_AMBIENT_N      = 3;    // number of ambient circling creatures during hover
 const BOSS_AMBIENT_RADIUS = 40;   // orbit radius for ambient creatures (world units)
 const bossData = {
-  x: BOSS_SPAWN_X, y: BOSS_SPAWN_Y, w: 40, h: 40,
-  spawnX: BOSS_SPAWN_X, spawnY: BOSS_SPAWN_Y,
+  x: BOSS_SPAWN_X - 8, y: BOSS_SPAWN_Y - 8, w: 56, h: 56,
+  spawnX: BOSS_SPAWN_X - 8, spawnY: BOSS_SPAWN_Y - 8,
   hp: 3, maxHp: 3,
   phase: 'hover', // 'hover'|'hover_clearambient'|'dashDrift'|'dash'|'pause'|'ascend'
   phaseTimer: 0,
@@ -731,7 +731,7 @@ function update() {
     spawnParticles(p.x + (p.wallDir > 0 ? p.w : 0), p.y+p.h/2, P.dashFx, 8, 5, 5, 14);
   }
   // — normal jump —
-  else if (p.jumpBuf > 0 && (p.coyote > 0 || p.dashGrace > 0) && !p.wallContact) {
+  else if (p.jumpBuf > 0 && (p.coyote > 0 || (p.dashGrace > 0 && p.jumpCount === 0)) && !p.wallContact) {
     p.dashTimer = 0;
     p.vy = JUMP_FORCE;
     p.coyote = 0; p.jumpBuf = 0;
@@ -1281,7 +1281,7 @@ function respawn() {
   const old = player;
   player = makePlayer();
   if (_customRespawn !== null) { player.x = _customRespawn.x; player.y = _customRespawn.y; }
-  if (bossDefeated) { player.x = 354; player.y = -2234; }
+  if (bossDefeated) { player.x = 354; player.y = -2242; }
   spawnParticles(old.x+old.w/2, old.y+old.h/2, P.h5, 16, 8, 8, 24);
   screenShake = 6;
   // full boss reset on death — flag reappears, intro replays on next attempt
@@ -1462,7 +1462,7 @@ function drawHnov(wx, wy, facingRight, state, animFrame) {
 
   // Anchor: bottom-centre of the hitbox
   const feetX = wx + 6;   // hitbox centre-x (w=12)
-  const feetY = wy + 16;  // hitbox bottom   (h=16)
+  const feetY = wy + 24;  // hitbox bottom   (h=24)
 
   const groundStates = ['idle', 'run', 'dying', 'dash'];
   const yOffset = groundStates.includes(state) ? 8 : 0;

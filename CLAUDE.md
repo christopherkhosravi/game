@@ -936,3 +936,29 @@ Code identifiers (`drawHnov`, `HNOV SPRITE SYSTEM` comment, `// Hnov sprite` com
 **Spawn position:** `BOSS_SPAWN_X=380, BOSS_SPAWN_Y=-2525`. Drift amplitude ±150 world units → boss centre ranges x=230–530, safe from walls.
 
 **Post-boss respawn:** After `bossDefeated`, player respawns at `x=354, y=-2234` (near chai cup area).
+
+## Hitbox Pass
+
+Adjusted collision hitboxes for three entities to better match their visible animations:
+
+**Player:** `h: 16 → 24` (width unchanged at 12). Spawn y updated to `GROUND_Y - 24`. `drawHnov()` `feetY` updated to `wy + 24`. The additional 8 units extends the hitbox upward from the legs into the lower torso, making hazard contact feel less deceptive. Torso pixel-span analysis confirmed w=12 already matches the character body width (10–14 world units at sprite scale).
+
+**Chai cup goal (GOAL):** `{x:408→396, w:24→48, h:60→72}`. Center stays at LW/2=420. Kullad sprite content measures ~52×70 world units at 80×80 draw size; new hitbox (48×72) is closely snug. Post-boss respawn y adjusted from −2234 to −2242 (delta −8 to preserve visual feet position).
+
+**Boss (bossData):** `w:40→56, h:40→56`. Spawn position adjusted (`x: BOSS_SPAWN_X − 8`, `y: BOSS_SPAWN_Y − 8`) to maintain the same visual center. Boss sprite content fills ~99% of the 80×80 draw area (~78×74 world units); the new hitbox (56×56) covers the central body while leaving a small margin at the extremities.
+
+**Locked layers not touched:** physics constants, platform layout, camera, controls.
+
+## Jump Budget Fix — No Dash-Reset
+
+**Problem:** Dashing mid-air triggered a "free" extra jump. The normal jump condition used `p.dashGrace > 0` as a ground substitute regardless of `jumpCount`, so a player with 1 jump used could dash, then immediately jump again (resetting `jumpCount` back to 1 and allowing another bounce). This could be chained infinitely.
+
+**Fix (line ~734):**
+```js
+// before
+else if (p.jumpBuf > 0 && (p.coyote > 0 || p.dashGrace > 0) && !p.wallContact) {
+// after
+else if (p.jumpBuf > 0 && (p.coyote > 0 || (p.dashGrace > 0 && p.jumpCount === 0)) && !p.wallContact) {
+```
+
+The `dashGrace` path is now gated on `p.jumpCount === 0`. This preserves the intended mechanic (dash from ground → dashGrace window still gives a first jump), while preventing aerial dashes from restoring the jump budget. The full budget (jumpCount=0) only resets on ground landing or fresh wall contact, as intended.
