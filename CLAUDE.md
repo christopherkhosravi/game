@@ -962,3 +962,45 @@ else if (p.jumpBuf > 0 && (p.coyote > 0 || (p.dashGrace > 0 && p.jumpCount === 0
 ```
 
 The `dashGrace` path is now gated on `p.jumpCount === 0`. This preserves the intended mechanic (dash from ground → dashGrace window still gives a first jump), while preventing aerial dashes from restoring the jump budget. The full budget (jumpCount=0) only resets on ground landing or fresh wall contact, as intended.
+
+## Powerup System
+
+**What it does:** A collectible pickup grants 4 seconds of invincibility, replacing the player sprite with a glowing animated orb.
+
+**Pickup object:**
+- `let powerup = null` — `{x, y, w:12, h:12}` or null (one at a time)
+- Rendered as a pulsing cyan orb with a radial glow in `drawWorld()` (world-space context)
+- When the player hitbox overlaps the pickup and `powerupTimer === 0`, pickup is consumed: `powerup = null`, `powerupTimer = POWERUP_DURATION`
+
+**Powerup state:**
+- `let powerupTimer = 0` — frames remaining (240 = 4 s at 60 fps); decremented every tick in `update()`
+- `const POWERUP_DURATION = 240`
+- While `powerupTimer > 0`: all hazard collision is skipped (`checkHazards()` returns early, creature contact check gated, boss body contact gated), player sprite replaced by `drawPowerupOrb()`
+- Last 60 frames fade out the orb alpha to signal expiry
+
+**`drawPowerupOrb(wx, wy, pw, ph, vx, vy)`:**
+- Smooths `vx/vy` into `_powerupVx/_powerupVy` (0.25 lerp) to avoid jitter
+- Stretches elliptically in the velocity direction (`stretchFactor = 1 + speed * 0.14`, max 2.2×), compresses perpendicularly (volume-preserving)
+- Rotates the draw context to the velocity angle via `Math.atan2`
+- Three layered radial gradients: halo (cyan→blue→transparent), mid-ring, core (white→aqua→blue)
+- Small specular highlight ellipse at upper-left
+
+**Integration points:**
+- `update()` — `powerupTimer--` runs before player physics; pickup overlap check runs after physics, before `checkHazards()`
+- `checkHazards()` — early-returns on `powerupTimer > 0` before enemy loop
+- `_tickCreatures()` — creature contact check gated with `powerupTimer === 0`
+- `updateBoss()` — boss body contact check gated with `powerupTimer === 0`
+- `respawn()` and `startGame()` — both reset `powerupTimer = 0`
+
+**God mode editor:**
+- **V key** — places powerup centred on player position; pressing V again near the existing pickup removes it
+- **Click + drag** on the pickup moves it (mousedown starts `_editorDragPowerup = true`)
+- **E export** — prints `let powerup = {...}` to console alongside spikes and platforms
+- God mode hitbox overlay draws pickup as magenta (`#ff00ff`) rect
+
+**Key variables (GAME STATE section):**
+- `powerup` — null or `{x, y, w, h}`
+- `powerupTimer` — int, frames remaining
+- `POWERUP_DURATION` — 240 (4 s)
+- `_powerupVx / _powerupVy` — smoothed velocity for orb stretch (reset to 0 on pickup)
+- `_editorDragPowerup` — bool, true while dragging the pickup in god mode
