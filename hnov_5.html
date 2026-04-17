@@ -144,9 +144,10 @@ const P = {
 // ─── LEVEL ───────────────────────────────────────────────────────────────────
 const LW = 840, LH = 1480;
 const GROUND_Y = 1440;
-// Physics/collision height (head-to-feet). player.h=24 is the hurtbox; PLAYER_PHYS_H=56 is used for
-// platform landing, wall detection, and sprite foot anchor. Keeps the hurtbox at torso/head level.
-const PLAYER_PHYS_H = 56;
+// Physics/collision height (head-to-feet). Equals SPRITE_H (80) so physics feet align with the
+// sprite bottom. player.h=68 is the hurtbox (head to near-feet); PLAYER_PHYS_H=80 is used for
+// platform landing, wall detection, sprite foot anchor, and fall-out detection.
+const PLAYER_PHYS_H = 80;
 
 // static platforms {x,y,w,h,type:'solid'|'pass'}
 // Vertical level: full-width rooftop floor + tall building walls with gap + interior platforms
@@ -273,7 +274,7 @@ const VAR_JUMP_CUT = 0.45;
 // ─── PLAYER ──────────────────────────────────────────────────────────────────
 function makePlayer() {
   return {
-    x:LW/2 - 6, y:GROUND_Y - PLAYER_PHYS_H, w:12, h:24,
+    x:LW/2 - 6, y:GROUND_Y - PLAYER_PHYS_H, w:12, h:68,
     vx:0, vy:0,
     onGround:false, wasOnGround:false,
     facingRight:true,
@@ -988,7 +989,8 @@ function checkHazards() {
     if (rectsOverlap(p.x,p.y,p.w,p.h, bx1,by1,8,8)) respawn();
     if (rectsOverlap(p.x,p.y,p.w,p.h, bx2,by2,8,8)) respawn();
   }
-  // enemies
+  // enemies — flight powerup grants invincibility against spikes/enemies
+  if (powerupTimer > 0) return;
   for (const e of enemies) {
     if (rectsOverlap(p.x+2,p.y+2,p.w-4,p.h-4, e.x,e.y,e.w,e.h)) {
       p.dead = true;
@@ -1184,7 +1186,7 @@ function updateBoss() {
       } else {
         cr.x += cr.vx;
       }
-      if (!player.dead && player.dashTimer === 0 &&
+      if (!player.dead && player.dashTimer === 0 && powerupTimer === 0 &&
           rectsOverlap(player.x, player.y, player.w, player.h, cr.x, cr.y, CREATURE_W, CREATURE_H)) {
         killPlayer();
       }
@@ -1346,7 +1348,7 @@ function respawn() {
   const old = player;
   player = makePlayer();
   if (_customRespawn !== null) { player.x = _customRespawn.x; player.y = _customRespawn.y; }
-  if (bossDefeated) { player.x = 354; player.y = -2274; }
+  if (bossDefeated) { player.x = 354; player.y = -2298; }
   powerupTimer = 0; _blobPts = null; powerups.forEach(pu => { pu.active = true; });
   spawnParticles(old.x+old.w/2, old.y+old.h/2, P.h5, 16, 8, 8, 24);
   screenShake = 6;
@@ -1368,15 +1370,15 @@ function r(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(Math.round(x),Math.round(y)
 // frameStart/frameLen: sub-range into the preloaded SPRITE_IMGS array for states
 //        that share a folder (jump vs fall both use animations/transparent/jump/).
 const SPRITE_DEFS = {
-  idle:   { folder: 'idle',      frames: 4, loop: true,  yOff: 19 },
-  run:    { folder: 'run',       frames: 3, loop: true,  yOff: 19 },
-  jump:   { folder: 'jump',      frames: 4, loop: true,  yOff: 19, frameStart: 0, frameLen: 2 },
-  fall:   { folder: 'jump',      loop: true,             yOff: 19, frameStart: 2, frameLen: 2 },
-  float:  { folder: 'dead hang', frames: 1, loop: true,  yOff: 19 },
-  bounce: { folder: 'bounce',    frames: 2, loop: true,  yOff: 19, firstFrame: 2 },
-  wall:   { folder: 'wall grab', frames: 1, loop: true,  yOff: 19, scale: 0.85 },
-  dash:   { folder: 'dash',      frames: 2, loop: true,  yOff: 19 },
-  dying:  { folder: 'dying',     frames: 4, loop: false, yOff: 19 },
+  idle:   { folder: 'idle',      frames: 4, loop: true,  yOff: 8 },
+  run:    { folder: 'run',       frames: 3, loop: true,  yOff: 8 },
+  jump:   { folder: 'jump',      frames: 4, loop: true,  yOff: 8, frameStart: 0, frameLen: 2 },
+  fall:   { folder: 'jump',      loop: true,             yOff: 8, frameStart: 2, frameLen: 2 },
+  float:  { folder: 'dead hang', frames: 1, loop: true,  yOff: 8 },
+  bounce: { folder: 'bounce',    frames: 2, loop: true,  yOff: 8, firstFrame: 2 },
+  wall:   { folder: 'wall grab', frames: 1, loop: true,  yOff: 8, scale: 0.85 },
+  dash:   { folder: 'dash',      frames: 2, loop: true,  yOff: 8 },
+  dying:  { folder: 'dying',     frames: 4, loop: false, yOff: 8 },
 };
 
 // Pre-load all PNG frames; keyed by folder name to avoid duplicate loads
@@ -1529,9 +1531,9 @@ const SPRITE_H = 80;
 // that is offset opposite the player velocity, creating drag / wobble / jelly feel.
 const BLOB_N       = 8;
 const BLOB_R       = 13;   // rest ring radius (world units, inside 2× scaled ctx)
-const BLOB_DRAG    = 0.55; // how far player velocity displaces each rest point
-const BLOB_SPRING  = 0.22; // spring stiffness (larger = snappier return)
-const BLOB_DAMP    = 0.68; // per-frame velocity damping (lower = more overshoot)
+const BLOB_DRAG    = 1.8;  // how far player velocity pulls rest positions back (higher = more trail)
+const BLOB_SPRING  = 0.06; // spring stiffness (lower = softer, slower return = more wobble)
+const BLOB_DAMP    = 0.88; // per-frame velocity retention (higher = more overshoot/oscillation)
 
 function _initBlobPts(cx, cy) {
   _blobPts = [];
