@@ -144,6 +144,9 @@ const P = {
 // ─── LEVEL ───────────────────────────────────────────────────────────────────
 const LW = 840, LH = 1480;
 const GROUND_Y = 1440;
+// Physics/collision height (head-to-feet). player.h=24 is the hurtbox; PLAYER_PHYS_H=56 is used for
+// platform landing, wall detection, and sprite foot anchor. Keeps the hurtbox at torso/head level.
+const PLAYER_PHYS_H = 56;
 
 // static platforms {x,y,w,h,type:'solid'|'pass'}
 // Vertical level: full-width rooftop floor + tall building walls with gap + interior platforms
@@ -270,7 +273,7 @@ const VAR_JUMP_CUT = 0.45;
 // ─── PLAYER ──────────────────────────────────────────────────────────────────
 function makePlayer() {
   return {
-    x:LW/2 - 6, y:GROUND_Y - 24, w:12, h:24,
+    x:LW/2 - 6, y:GROUND_Y - PLAYER_PHYS_H, w:12, h:24,
     vx:0, vy:0,
     onGround:false, wasOnGround:false,
     facingRight:true,
@@ -368,7 +371,7 @@ function clearFrame() {
 const cam = {x:0, y: LH - CH / 2};
 function updateCamera() {
   let tx = player.x - CW/4 + player.w/2;
-  let ty = player.y - (CH / 2 - (LH - GROUND_Y) - player.h);
+  let ty = player.y - (CH / 2 - (LH - GROUND_Y) - PLAYER_PHYS_H);
   tx = Math.max(0, Math.min(LW - CW/2, tx));
   ty = Math.max(-2625, ty); // vertical: clamp to y=-2625 (just above extended level top)
   cam.x += (tx - cam.x) * 0.1;
@@ -556,6 +559,7 @@ function update() {
     const p = player;
     p.dead = false;
     const GM_SPEED = 5;
+    let _arrowFly = false;
     // editor: arrow keys nudge selected platform (1 unit/press); shift+arrows scale it; else fly player
     if (editorSelectedPlat >= 0) {
       const sp = staticPlats[editorSelectedPlat];
@@ -570,11 +574,13 @@ function update() {
         if (justPressed['ArrowDown'])  sp.y += 1;
       }
     } else {
-      if (keys['ArrowLeft'])  { p.x -= GM_SPEED; p.facingRight = false; }
-      if (keys['ArrowRight']) { p.x += GM_SPEED; p.facingRight = true; }
-      if (keys['ArrowUp'])    p.y -= GM_SPEED;
-      if (keys['ArrowDown'])  p.y += GM_SPEED;
+      if (keys['ArrowLeft'])  { p.x -= GM_SPEED; p.facingRight = false; _arrowFly = true; }
+      if (keys['ArrowRight']) { p.x += GM_SPEED; p.facingRight = true;  _arrowFly = true; }
+      if (keys['ArrowUp'])    { p.y -= GM_SPEED; _arrowFly = true; }
+      if (keys['ArrowDown'])  { p.y += GM_SPEED; _arrowFly = true; }
     }
+    // Arrow flight overrides physics velocity for that frame; WASD/Space abilities work freely otherwise
+    if (_arrowFly) { p.vx = 0; p.vy = 0; }
     // F saves current player position as custom respawn point
     if (justPressed['KeyF']) {
       _customRespawn = { x: player.x, y: player.y };
@@ -602,13 +608,7 @@ function update() {
       _editorExportMsg = 120;
     }
     if (_editorExportMsg > 0) _editorExportMsg--;
-    p.vx = 0; p.vy = 0;
-    particles = particles.filter(pt => { pt.x += pt.vx; pt.y += pt.vy; pt.vy += 0.15; pt.vx *= 0.92; pt.life--; return pt.life > 0; });
-    if (screenShake > 0) screenShake--;
-    if (bossTriggered && !bossDefeated && !bossActive && player.y < BOSS_TRIGGER_Y) { bossActive = true; resetBoss(); }
-    if (bossActive || bossDeathPending) updateBoss();
-    updateCamera();
-    return;
+    // fall through — normal update continues below
   }
 
   // — update moving platforms —
@@ -638,7 +638,7 @@ function update() {
     p.vy += FALL_G;
     if (p.vy > MAX_FALL) p.vy = MAX_FALL;
     p.y += p.vy;
-    const ry = resolveY(p.x, p.y, p.w, p.h, p.vy);
+    const ry = resolveY(p.x, p.y, p.w, PLAYER_PHYS_H, p.vy);
     p.y = ry.py; p.vy = ry.vy;
     if (deathPhase === 'dying') {
       // Advance dying animation at normal speed (16 ticks/frame), play once
@@ -662,18 +662,18 @@ function update() {
   }
 
   // — inputs —
-  const left   = press(['KeyA','ArrowLeft']);
-  const right  = press(['KeyD','ArrowRight']);
-  const down   = press(['KeyS','ArrowDown']);
-  const downP  = jp(['KeyS','ArrowDown']);
-  const jumpP  = jp(['Space','KeyW','ArrowUp']);
-  const jumpH  = press(['Space','KeyW','ArrowUp']);
-  const jumpR  = jr(['Space','KeyW','ArrowUp']);
+  const left   = godMode ? press(['KeyA'])              : press(['KeyA','ArrowLeft']);
+  const right  = godMode ? press(['KeyD'])              : press(['KeyD','ArrowRight']);
+  const down   = godMode ? press(['KeyS'])              : press(['KeyS','ArrowDown']);
+  const downP  = godMode ? jp(['KeyS'])                 : jp(['KeyS','ArrowDown']);
+  const jumpP  = godMode ? jp(['Space','KeyW'])         : jp(['Space','KeyW','ArrowUp']);
+  const jumpH  = godMode ? press(['Space','KeyW'])      : press(['Space','KeyW','ArrowUp']);
+  const jumpR  = godMode ? jr(['Space','KeyW'])         : jr(['Space','KeyW','ArrowUp']);
   const dashQP = jp(['DashLeft']);
   const dashEP = jp(['DashRight']);
   const restP  = jp(['KeyR']);
 
-  if (restP) { respawn(); return; }
+  if (restP && !godMode) { respawn(); return; }
 
   // — dash — Q=left, E=right
   if ((dashQP || dashEP) && p.dashTimer === 0) {
@@ -727,7 +727,7 @@ function update() {
   let touchWallL = false, touchWallR = false;
   for (const pl of allPlatforms()) {
     if (pl.type !== 'solid') continue;
-    if (p.y + p.h <= pl.y + 2 || p.y >= pl.y + pl.h - 2) continue;
+    if (p.y + PLAYER_PHYS_H <= pl.y + 2 || p.y >= pl.y + pl.h - 2) continue;
     if (Math.abs((p.x) - (pl.x + pl.w)) < 3 && p.vx <= 0) touchWallL = true;
     if (Math.abs((p.x + p.w) - pl.x) < 3   && p.vx >= 0) touchWallR = true;
   }
@@ -763,7 +763,7 @@ function update() {
     p.jumpCut = false;
     p.jumpHeld = true;
     p.jumpCount = 1;
-    spawnParticles(p.x+p.w/2, p.y+p.h, P.particle, 6, 4, 3, 10);
+    spawnParticles(p.x+p.w/2, p.y+PLAYER_PHYS_H, P.particle, 6, 4, 3, 10);
   }
   // — bounce: second SPACE in air —
   else if (jumpP && !p.onGround && p.jumpCount === 1 && !p.bouncing) {
@@ -813,13 +813,13 @@ function update() {
   // — resolve X —
   p.x += p.vx;
   p.x = Math.max(0, Math.min(LW - p.w, p.x));
-  const rx = resolveX(p.x, p.y, p.w, p.h, p.vx);
+  const rx = resolveX(p.x, p.y, p.w, PLAYER_PHYS_H, p.vx);
   p.x = rx.px; p.vx = rx.vx;
 
   // — resolve Y —
   p.wasOnGround = p.onGround;
   p.y += p.vy;
-  const ry = resolveY(p.x, p.y, p.w, p.h, p.vy);
+  const ry = resolveY(p.x, p.y, p.w, PLAYER_PHYS_H, p.vy);
   p.y = ry.py; p.vy = ry.vy;
 
   if (ry.landed) {
@@ -831,7 +831,7 @@ function update() {
     p.jumpCount = 0;
 
     if (!p.wasOnGround) {
-      spawnParticles(p.x+p.w/2, p.y+p.h, P.particle, 4, 4, 2, 8);
+      spawnParticles(p.x+p.w/2, p.y+PLAYER_PHYS_H, P.particle, 4, 4, 2, 8);
     }
   } else {
     p.onGround = false;
@@ -842,7 +842,7 @@ function update() {
   else p.quakeActive = false;
 
   // — kill: fall out —
-  if (p.y > LH + 60) respawn();
+  if (!godMode && p.y + PLAYER_PHYS_H > LH + 60) respawn();
 
   // — powerup pickup —
   if (powerup && powerupTimer === 0 &&
@@ -854,7 +854,7 @@ function update() {
   }
 
   // — hazard & enemy collision —
-  checkHazards();
+  if (!godMode) checkHazards();
 
   // — boss trigger (first time: play intro cutscene) —
   if (!bossTriggered && !bossDefeated && !player.dead && player.y < BOSS_TRIGGER_Y) {
@@ -1315,7 +1315,7 @@ function respawn() {
   const old = player;
   player = makePlayer();
   if (_customRespawn !== null) { player.x = _customRespawn.x; player.y = _customRespawn.y; }
-  if (bossDefeated) { player.x = 354; player.y = -2242; }
+  if (bossDefeated) { player.x = 354; player.y = -2274; }
   powerupTimer = 0;
   spawnParticles(old.x+old.w/2, old.y+old.h/2, P.h5, 16, 8, 8, 24);
   screenShake = 6;
@@ -1337,15 +1337,15 @@ function r(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(Math.round(x),Math.round(y)
 // frameStart/frameLen: sub-range into the preloaded SPRITE_IMGS array for states
 //        that share a folder (jump vs fall both use animations/transparent/jump/).
 const SPRITE_DEFS = {
-  idle:   { folder: 'idle',      frames: 4, loop: true,  yOff: 8  },
-  run:    { folder: 'run',       frames: 3, loop: true,  yOff: 8  },
-  jump:   { folder: 'jump',      frames: 4, loop: true,  yOff: 33, frameStart: 0, frameLen: 2 },
-  fall:   { folder: 'jump',      loop: true,             yOff: 4,  frameStart: 2, frameLen: 2 },
-  float:  { folder: 'dead hang', frames: 1, loop: true,  yOff: 3  },
-  bounce: { folder: 'bounce',    frames: 2, loop: true,  yOff: 40, firstFrame: 2 },
-  wall:   { folder: 'wall grab', frames: 1, loop: true,  yOff: 4,  scale: 0.85 },
-  dash:   { folder: 'dash',      frames: 2, loop: true,  yOff: 4  },
-  dying:  { folder: 'dying',     frames: 4, loop: false, yOff: 8  },
+  idle:   { folder: 'idle',      frames: 4, loop: true,  yOff: 19 },
+  run:    { folder: 'run',       frames: 3, loop: true,  yOff: 19 },
+  jump:   { folder: 'jump',      frames: 4, loop: true,  yOff: 19, frameStart: 0, frameLen: 2 },
+  fall:   { folder: 'jump',      loop: true,             yOff: 19, frameStart: 2, frameLen: 2 },
+  float:  { folder: 'dead hang', frames: 1, loop: true,  yOff: 19 },
+  bounce: { folder: 'bounce',    frames: 2, loop: true,  yOff: 19, firstFrame: 2 },
+  wall:   { folder: 'wall grab', frames: 1, loop: true,  yOff: 19, scale: 0.85 },
+  dash:   { folder: 'dash',      frames: 2, loop: true,  yOff: 19 },
+  dying:  { folder: 'dying',     frames: 4, loop: false, yOff: 19 },
 };
 
 // Pre-load all PNG frames; keyed by folder name to avoid duplicate loads
@@ -1566,7 +1566,7 @@ function drawHnov(wx, wy, facingRight, state, animFrame) {
 
   // Anchor: bottom-centre of the hitbox
   const feetX = wx + 6;   // hitbox centre-x (w=12)
-  const feetY = wy + 24;  // hitbox bottom   (h=24)
+  const feetY = wy + PLAYER_PHYS_H;  // sprite foot anchor (physics height)
 
   // Per-state yOff shifts sprite so visible feet align with feetY.
   const yOffset = _def.yOff ?? 0;

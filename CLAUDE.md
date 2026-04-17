@@ -1004,3 +1004,38 @@ The `dashGrace` path is now gated on `p.jumpCount === 0`. This preserves the int
 - `POWERUP_DURATION` — 240 (4 s)
 - `_powerupVx / _powerupVy` — smoothed velocity for orb stretch (reset to 0 on pickup)
 - `_editorDragPowerup` — bool, true while dragging the pickup in god mode
+
+## Player Hitbox — Torso/Head Coverage
+
+**What changed:** `player.h` (hurtbox) covers the torso and head instead of the lower legs/feet. A new constant `PLAYER_PHYS_H = 56` separates the physics collision height from the hurtbox height.
+
+**Key values:**
+- `player.h = 24` — hurtbox (used for hazard/enemy/goal/powerup overlap detection)
+- `PLAYER_PHYS_H = 56` — distance from `player.y` (head) to feet; used for platform landing, ceiling, wall detection, fall-out, and sprite foot anchor
+- `player.y` = top of hurtbox = approximate head position (was previously near feet-minus-24)
+- Spawn: `y: GROUND_Y - PLAYER_PHYS_H`; post-boss respawn: `y: -2274`
+
+**Physics calls updated to PLAYER_PHYS_H:**
+- `resolveX` and `resolveY` calls (both the dead block and the live block)
+- Wall detection loop: `p.y + PLAYER_PHYS_H`
+- Fall-out check: `p.y + PLAYER_PHYS_H > LH + 60`
+- Landing and jump particles (feet position)
+- `drawHnov` `feetY`: `wy + PLAYER_PHYS_H`
+
+**Sprite alignment:** All SPRITE_DEFS `yOff = 19`. Formula: `player.y + PLAYER_PHYS_H - SPRITE_H + 19 = player.y - 5`, placing sprite head ~5 units above `player.y` (within the hurtbox top).
+
+**Hurtbox calls unchanged (still use `p.h`):**
+- `checkHazards` enemy/gate/barrier overlaps
+- Goal overlap, powerup pickup, wind zone, boss creature contact
+
+## God Mode — Abilities Work
+
+**What changed:** Arrow-key free flight and WASD/Space/Q/E abilities now both work simultaneously in god mode. Previously, god mode zeroed `vx/vy` and returned early, blocking all ability logic.
+
+**How it works:**
+- God mode block no longer has an early `return` — normal update code falls through after the god mode block
+- `_arrowFly` flag: when any arrow key is actively held (and no platform is selected), `p.vx = 0; p.vy = 0` is applied so arrow flight overrides physics for that frame
+- When no arrow keys are held, normal physics (gravity, momentum) applies — abilities behave exactly as in normal play
+- Arrow keys are excluded from the ability input vars when `godMode` is true: `left/right/down/downP/jumpP/jumpH/jumpR` only check WASD+Space in god mode, so ArrowLeft/Right can't accidentally trigger movement, and ArrowUp can't trigger jump
+- Hazard check, fall-out kill, and R-key restart are all gated with `!godMode`
+- `killPlayer()` already had a `godMode` guard — unchanged
