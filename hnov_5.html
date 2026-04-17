@@ -444,11 +444,12 @@ let godMode = false;
 let _customRespawn = null; // {x, y} world coords set via F in god mode; null = default spawn
 
 // — powerup —
-let powerup = null;         // {x, y, w:12, h:12} or null
+let powerups = [];          // [{x,y,w:12,h:12,active:true}, ...] — persistent level pickups
 let powerupTimer = 0;       // frames remaining (240 = 4 s at 60 fps)
 const POWERUP_DURATION = 240;
-let _powerupVx = 0;         // smoothed player vx for orb stretch
-let _powerupVy = 0;         // smoothed player vy for orb stretch
+let _powerupVx = 0;         // smoothed player vx for orb drag
+let _powerupVy = 0;         // smoothed player vy for orb drag
+let _blobPts = null;        // soft-body anchor points [{cx,cy,vx,vy}] in world units
 
 // level editor (god mode only)
 let editorSelectedPlat = -1;  // index into staticPlats; -1 = none selected
@@ -458,7 +459,7 @@ let _editorDragStartCY = 0;
 let _editorDragPlatX0 = 0;    // platform x/y at drag start (world units)
 let _editorDragPlatY0 = 0;
 let _editorExportMsg = 0;     // frames remaining to show "Exported to console"
-let _editorDragPowerup = false; // true while dragging the powerup pickup
+let _editorDragPowerupIdx = -1; // index into powerups[] being dragged, -1 = none
 
 // cutscene
 let cutsceneClip = 0;
@@ -585,15 +586,16 @@ function update() {
     if (justPressed['KeyF']) {
       _customRespawn = { x: player.x, y: player.y };
     }
-    // V places / removes powerup at player position
+    // V places a new powerup pickup at player position (unlimited); V near existing = remove it
     if (justPressed['KeyV']) {
       const pw = 12, ph = 12;
       const px = Math.round(player.x + player.w / 2 - pw / 2);
-      const py = Math.round(player.y + player.h / 2 - ph / 2);
-      if (powerup && Math.abs(powerup.x - px) < 20 && Math.abs(powerup.y - py) < 20) {
-        powerup = null; // remove if clicking near existing
+      const py = Math.round(player.y + PLAYER_PHYS_H / 2 - ph / 2);
+      const nearIdx = powerups.findIndex(pu => Math.abs(pu.x - px) < 20 && Math.abs(pu.y - py) < 20);
+      if (nearIdx >= 0) {
+        powerups.splice(nearIdx, 1); // remove nearby pickup
       } else {
-        powerup = { x: px, y: py, w: pw, h: ph };
+        powerups.push({ x: px, y: py, w: pw, h: ph, active: true });
       }
     }
     // editor: E exports current spike array + platform positions to console
@@ -603,8 +605,9 @@ function update() {
       console.log('%c=== PLATFORM POSITIONS ===', 'color:#ff6b9d;font-weight:bold');
       const pLines = staticPlats.map(pl => `  {x:${pl.x}, y:${pl.y}, w:${pl.w}, h:${pl.h}, type:'${pl.type}'}`).join(',\n');
       console.log('const staticPlats = [\n' + pLines + '\n];');
-      console.log('%c=== POWERUP ===', 'color:#00ffcc;font-weight:bold');
-      console.log('let powerup = ' + (powerup ? JSON.stringify({x:powerup.x, y:powerup.y, w:powerup.w, h:powerup.h}) : 'null') + ';');
+      console.log('%c=== POWERUPS ===', 'color:#00ffcc;font-weight:bold');
+      const _puLines = powerups.map(pu => `  {x:${pu.x}, y:${pu.y}, w:${pu.w}, h:${pu.h}, active:true}`).join(',\n');
+      console.log('let powerups = [\n' + _puLines + '\n];');
       _editorExportMsg = 120;
     }
     if (_editorExportMsg > 0) _editorExportMsg--;
@@ -628,7 +631,10 @@ function update() {
   for (const rb of rotBarriers) rb.angle += rb.speed;
 
   // — powerup timer —
-  if (powerupTimer > 0) powerupTimer--;
+  if (powerupTimer > 0) {
+    powerupTimer--;
+    if (powerupTimer === 0) { powerups.forEach(pu => { pu.active = true; }); _blobPts = null; }
+  }
 
   const p = player;
   if (p.dead) {
@@ -675,6 +681,27 @@ function update() {
 
   if (restP && !godMode) { respawn(); return; }
 
+  // — physics: normal mode OR powerup flight mode (do-while(false) for clean break-skip) —
+  do {
+  if (powerupTimer > 0) {
+    // Free directional flight: movement keys steer, no gravity, no abilities
+    const FLIGHT_SPD = 2.8;
+    p.dashTimer = 0; p.dashGrace = 0; p.floating = false; p.wallContact = false; p.onGround = false;
+    if (left)       { p.vx = -FLIGHT_SPD; p.facingRight = false; }
+    else if (right) { p.vx =  FLIGHT_SPD; p.facingRight = true;  }
+    else            { p.vx *= 0.80; if (Math.abs(p.vx) < 0.1) p.vx = 0; }
+    if (jumpH)      p.vy = -FLIGHT_SPD;
+    else if (down)  p.vy =  FLIGHT_SPD;
+    else            { p.vy *= 0.80; if (Math.abs(p.vy) < 0.1) p.vy = 0; }
+    p.x += p.vx;
+    p.x = Math.max(0, Math.min(LW - p.w, p.x));
+    const _frx = resolveX(p.x, p.y, p.w, PLAYER_PHYS_H, p.vx);
+    p.x = _frx.px; p.vx = _frx.vx;
+    p.y += p.vy;
+    const _fry = resolveY(p.x, p.y, p.w, PLAYER_PHYS_H, p.vy);
+    p.y = _fry.py; p.vy = _fry.vy;
+    break; // skip normal physics below
+  }
   // — dash — Q=left, E=right
   if ((dashQP || dashEP) && p.dashTimer === 0) {
     p.dashDir    = dashQP ? -1 : 1;
@@ -840,17 +867,22 @@ function update() {
 
   if (p.quakeTimer > 0) p.quakeTimer--;
   else p.quakeActive = false;
+  } while (false); // end normal/flight physics block
 
   // — kill: fall out —
   if (!godMode && p.y + PLAYER_PHYS_H > LH + 60) respawn();
 
   // — powerup pickup —
-  if (powerup && powerupTimer === 0 &&
-      rectsOverlap(p.x, p.y, p.w, p.h, powerup.x, powerup.y, powerup.w, powerup.h)) {
-    powerup = null;
-    powerupTimer = POWERUP_DURATION;
-    _powerupVx = 0; _powerupVy = 0;
-    spawnParticles(p.x + p.w / 2, p.y + p.h / 2, '#00ffcc', 18, 6, 6, 22);
+  if (powerupTimer === 0) {
+    for (const _pu of powerups) {
+      if (_pu.active && rectsOverlap(p.x, p.y, p.w, p.h, _pu.x, _pu.y, _pu.w, _pu.h)) {
+        _pu.active = false;
+        powerupTimer = POWERUP_DURATION;
+        _powerupVx = 0; _powerupVy = 0; _blobPts = null;
+        spawnParticles(p.x + p.w / 2, p.y + PLAYER_PHYS_H / 2, '#00ffcc', 18, 6, 6, 22);
+        break;
+      }
+    }
   }
 
   // — hazard & enemy collision —
@@ -957,7 +989,6 @@ function checkHazards() {
     if (rectsOverlap(p.x,p.y,p.w,p.h, bx2,by2,8,8)) respawn();
   }
   // enemies
-  if (powerupTimer > 0) return; // invincible — skip all hazard death
   for (const e of enemies) {
     if (rectsOverlap(p.x+2,p.y+2,p.w-4,p.h-4, e.x,e.y,e.w,e.h)) {
       p.dead = true;
@@ -1153,7 +1184,7 @@ function updateBoss() {
       } else {
         cr.x += cr.vx;
       }
-      if (!player.dead && player.dashTimer === 0 && powerupTimer === 0 &&
+      if (!player.dead && player.dashTimer === 0 &&
           rectsOverlap(player.x, player.y, player.w, player.h, cr.x, cr.y, CREATURE_W, CREATURE_H)) {
         killPlayer();
       }
@@ -1305,7 +1336,7 @@ function updateBoss() {
   }
 
   // Boss body contact kills player regardless of phase (unless powered up)
-  if (!player.dead && powerupTimer === 0 && rectsOverlap(player.x + 2, player.y + 2, player.w - 4, player.h - 4, b.x, b.y, b.w, b.h)) {
+  if (!player.dead && rectsOverlap(player.x + 2, player.y + 2, player.w - 4, player.h - 4, b.x, b.y, b.w, b.h)) {
     killPlayer();
   }
   updateBossAnim(b);
@@ -1316,7 +1347,7 @@ function respawn() {
   player = makePlayer();
   if (_customRespawn !== null) { player.x = _customRespawn.x; player.y = _customRespawn.y; }
   if (bossDefeated) { player.x = 354; player.y = -2274; }
-  powerupTimer = 0;
+  powerupTimer = 0; _blobPts = null; powerups.forEach(pu => { pu.active = true; });
   spawnParticles(old.x+old.w/2, old.y+old.h/2, P.h5, 16, 8, 8, 24);
   screenShake = 6;
   // full boss reset on death — flag reappears, intro replays on next attempt
@@ -1493,64 +1524,104 @@ function updateBgVideo() {
 const SPRITE_W = 60;
 const SPRITE_H = 80;
 
-// Draws the powerup orb in place of the player sprite while powerupTimer > 0.
-// The orb stretches in the direction of movement, trails, and pulses.
+// ─── SOFT-BODY BLOB ─────────────────────────────────────────────────────────
+// 8 anchor points arranged in a ring. Each point springs toward a rest position
+// that is offset opposite the player velocity, creating drag / wobble / jelly feel.
+const BLOB_N       = 8;
+const BLOB_R       = 13;   // rest ring radius (world units, inside 2× scaled ctx)
+const BLOB_DRAG    = 0.55; // how far player velocity displaces each rest point
+const BLOB_SPRING  = 0.22; // spring stiffness (larger = snappier return)
+const BLOB_DAMP    = 0.68; // per-frame velocity damping (lower = more overshoot)
+
+function _initBlobPts(cx, cy) {
+  _blobPts = [];
+  for (let i = 0; i < BLOB_N; i++) {
+    const a = (i / BLOB_N) * Math.PI * 2;
+    _blobPts.push({ cx: cx + Math.cos(a) * BLOB_R, cy: cy + Math.sin(a) * BLOB_R, vx: 0, vy: 0 });
+  }
+}
+
+// Draws the powerup orb — a soft-body blob that wobbles with player movement.
+// Called inside the 2× scaled ctx, so all coords are world units.
 function drawPowerupOrb(wx, wy, pw, ph, vx, vy) {
-  // Smooth velocity for stretch (avoids jitter from single-frame spikes)
+  // Smooth velocity for drag (avoids jitter from single-frame spikes)
   _powerupVx += (vx - _powerupVx) * 0.25;
   _powerupVy += (vy - _powerupVy) * 0.25;
 
+  // Orb centre: horizontal midpoint, vertical body centre (head → feet midpoint)
   const cx = wx + pw / 2;
-  const cy = wy + ph / 2;
-  const speed = Math.sqrt(_powerupVx * _powerupVx + _powerupVy * _powerupVy);
+  const cy = wy + PLAYER_PHYS_H / 2;
 
-  // Base radius — slightly bigger than the hitbox half-diagonal
-  const baseR = 10;
-  // Stretch: elongate in velocity direction, compress perp. Max 2.2× stretch at speed 10+
-  const stretchFactor = Math.min(1 + speed * 0.14, 2.2);
-  const squishFactor  = 1 / Math.sqrt(stretchFactor); // volume-preserving
-  const angle = speed > 0.3 ? Math.atan2(_powerupVy, _powerupVx) : 0;
+  if (!_blobPts) _initBlobPts(cx, cy);
 
-  // Pulse phase — independent of motion
-  const pulsePh = (frame * 0.1) % (Math.PI * 2);
-  const pulseAmt = 0.06 + Math.sin(pulsePh) * 0.06;
+  // Spring each anchor point toward its rest position (offset by velocity drag)
+  for (let i = 0; i < BLOB_N; i++) {
+    const a = (i / BLOB_N) * Math.PI * 2;
+    const restX = cx + Math.cos(a) * BLOB_R - _powerupVx * BLOB_DRAG;
+    const restY = cy + Math.sin(a) * BLOB_R - _powerupVy * BLOB_DRAG;
+    const pt = _blobPts[i];
+    const ax = (restX - pt.cx) * BLOB_SPRING;
+    const ay = (restY - pt.cy) * BLOB_SPRING;
+    pt.vx = (pt.vx + ax) * BLOB_DAMP;
+    pt.vy = (pt.vy + ay) * BLOB_DAMP;
+    pt.cx += pt.vx;
+    pt.cy += pt.vy;
+  }
 
-  // Fade-out in last 60 frames (1 s)
+  // Fade out in the last second (60 frames)
   const fadeAlpha = powerupTimer < 60 ? powerupTimer / 60 : 1;
+
+  // Build a smooth closed path through anchor points using quadratic bezier midpoints
+  const blobPath = () => {
+    ctx.beginPath();
+    const last = _blobPts[BLOB_N - 1];
+    const first = _blobPts[0];
+    ctx.moveTo((last.cx + first.cx) / 2, (last.cy + first.cy) / 2);
+    for (let i = 0; i < BLOB_N; i++) {
+      const p0 = _blobPts[i];
+      const p1 = _blobPts[(i + 1) % BLOB_N];
+      ctx.quadraticCurveTo(p0.cx, p0.cy, (p0.cx + p1.cx) / 2, (p0.cy + p1.cy) / 2);
+    }
+    ctx.closePath();
+  };
 
   ctx.save();
   ctx.globalAlpha = fadeAlpha;
-  ctx.translate(cx, cy);
-  ctx.rotate(angle);
-  ctx.scale(stretchFactor * (1 + pulseAmt), squishFactor * (1 - pulseAmt * 0.5));
 
-  // Trail glow (large soft halo)
-  const _halo = ctx.createRadialGradient(-baseR * 0.4, 0, 0, 0, 0, baseR * 2.8);
-  _halo.addColorStop(0, 'rgba(120,255,230,0.45)');
-  _halo.addColorStop(0.5, 'rgba(0,200,255,0.22)');
-  _halo.addColorStop(1, 'rgba(0,80,255,0)');
-  ctx.fillStyle = _halo;
-  ctx.beginPath(); ctx.arc(0, 0, baseR * 2.8, 0, Math.PI * 2); ctx.fill();
+  // Layer 1 — outer glow halo (large, soft, low-alpha)
+  blobPath();
+  ctx.shadowColor = '#00ffee';
+  ctx.shadowBlur = 20;
+  ctx.fillStyle = 'rgba(0,210,255,0.18)';
+  ctx.fill();
 
-  // Mid glow ring
-  const _mid = ctx.createRadialGradient(0, 0, baseR * 0.4, 0, 0, baseR * 1.4);
-  _mid.addColorStop(0, 'rgba(0,255,204,0.6)');
-  _mid.addColorStop(1, 'rgba(0,120,255,0)');
-  ctx.fillStyle = _mid;
-  ctx.beginPath(); ctx.arc(0, 0, baseR * 1.4, 0, Math.PI * 2); ctx.fill();
+  // Layer 2 — main blob fill with radial gradient + inner glow
+  blobPath();
+  const grad = ctx.createRadialGradient(cx - 2.5, cy - 2.5, 0, cx, cy, BLOB_R * 1.15);
+  grad.addColorStop(0,    '#ffffff');
+  grad.addColorStop(0.25, '#aaffee');
+  grad.addColorStop(0.65, '#00aaff');
+  grad.addColorStop(1,    '#0044cc');
+  ctx.fillStyle = grad;
+  ctx.shadowColor = '#00ffcc';
+  ctx.shadowBlur = 10;
+  ctx.fill();
 
-  // Core — bright centre
-  const _core = ctx.createRadialGradient(-baseR * 0.2, -baseR * 0.2, 0, 0, 0, baseR);
-  _core.addColorStop(0, '#ffffff');
-  _core.addColorStop(0.25, '#aaffee');
-  _core.addColorStop(0.7, '#00aaff');
-  _core.addColorStop(1, '#0044cc');
-  ctx.fillStyle = _core;
-  ctx.beginPath(); ctx.arc(0, 0, baseR, 0, Math.PI * 2); ctx.fill();
+  // Layer 3 — bright inner stroke to define the edge
+  blobPath();
+  ctx.strokeStyle = 'rgba(160,255,255,0.55)';
+  ctx.lineWidth = 0.6;
+  ctx.shadowColor = 'rgba(0,255,220,0.9)';
+  ctx.shadowBlur = 5;
+  ctx.stroke();
 
-  // Specular highlight
-  ctx.fillStyle = 'rgba(255,255,255,0.7)';
-  ctx.beginPath(); ctx.ellipse(-baseR * 0.3, -baseR * 0.35, baseR * 0.2, baseR * 0.12, -0.5, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Layer 4 — specular highlight (small bright ellipse, upper-left of centre)
+  ctx.fillStyle = 'rgba(255,255,255,0.70)';
+  ctx.beginPath();
+  ctx.ellipse(cx - BLOB_R * 0.3, cy - BLOB_R * 0.32, BLOB_R * 0.22, BLOB_R * 0.13, -0.5, 0, Math.PI * 2);
+  ctx.fill();
 
   ctx.restore();
 }
@@ -1938,13 +2009,13 @@ function drawWorld() {
     }
   }
 
-  // — powerup pickup —
-  if (powerup) {
-    const pu = powerup;
+  // — powerup pickups —
+  for (const _pu of powerups) {
+    if (!_pu.active) continue;
     const pt = (frame * 0.08) % (Math.PI * 2);
     const pulse = 1 + Math.sin(pt) * 0.15;
     const pr = 6 * pulse;       // radius in world units
-    const pcx = pu.x + pu.w / 2, pcy = pu.y + pu.h / 2;
+    const pcx = _pu.x + _pu.w / 2, pcy = _pu.y + _pu.h / 2;
     // outer glow
     const _pg = ctx.createRadialGradient(pcx, pcy, 0, pcx, pcy, pr * 2.5);
     _pg.addColorStop(0, 'rgba(0,255,204,0.35)');
@@ -2620,13 +2691,13 @@ function render() {
       ctx.fillRect(_gx, _gy, GOAL.w * 2, GOAL.h * 2);
       ctx.strokeRect(_gx, _gy, GOAL.w * 2, GOAL.h * 2);
     }
-    // powerup hitbox
-    if (powerup) {
-      ctx.strokeStyle = '#ff00ff';
-      ctx.fillStyle = 'rgba(255,0,255,0.2)';
-      const _px = (powerup.x - cam.x) * 2, _py = (powerup.y - cam.y) * 2;
-      ctx.fillRect(_px, _py, powerup.w * 2, powerup.h * 2);
-      ctx.strokeRect(_px, _py, powerup.w * 2, powerup.h * 2);
+    // powerup hitboxes (active = bright; collected/inactive = dim)
+    for (const _pu of powerups) {
+      ctx.strokeStyle = _pu.active ? '#ff00ff' : 'rgba(255,0,255,0.4)';
+      ctx.fillStyle   = _pu.active ? 'rgba(255,0,255,0.2)' : 'rgba(255,0,255,0.06)';
+      const _px = (_pu.x - cam.x) * 2, _py = (_pu.y - cam.y) * 2;
+      ctx.fillRect(_px, _py, _pu.w * 2, _pu.h * 2);
+      ctx.strokeRect(_px, _py, _pu.w * 2, _pu.h * 2);
     }
     ctx.restore();
 
@@ -2710,7 +2781,7 @@ function startGame() {
   // reset boss fight state
   bossTriggered = false; bossDefeated = false; bossActive = false; bossDeathPending = false;
   resetBoss();
-  powerupTimer = 0;
+  powerupTimer = 0; _blobPts = null; powerups.forEach(pu => { pu.active = true; });
   document.getElementById('overlay').classList.add('hidden');
 }
 
@@ -2783,14 +2854,17 @@ canvas.addEventListener('mousedown', e => {
       return;
     }
   }
-  // 1a. click on powerup → drag it (mouseup without move = remove handled via double-click pattern; single click starts drag)
-  if (powerup && wx >= powerup.x - 4 && wx <= powerup.x + powerup.w + 4 && wy >= powerup.y - 4 && wy <= powerup.y + powerup.h + 4) {
-    _editorDragPowerup = true;
-    _editorDragStartCX = e.clientX;
-    _editorDragStartCY = e.clientY;
-    _editorDragPlatX0 = powerup.x;
-    _editorDragPlatY0 = powerup.y;
-    return;
+  // 1a. click on any powerup pickup → drag it
+  for (let _pi = 0; _pi < powerups.length; _pi++) {
+    const _pu = powerups[_pi];
+    if (wx >= _pu.x - 4 && wx <= _pu.x + _pu.w + 4 && wy >= _pu.y - 4 && wy <= _pu.y + _pu.h + 4) {
+      _editorDragPowerupIdx = _pi;
+      _editorDragStartCX = e.clientX;
+      _editorDragStartCY = e.clientY;
+      _editorDragPlatX0 = _pu.x;
+      _editorDragPlatY0 = _pu.y;
+      return;
+    }
   }
   // 1b. click on enemy → remove it
   for (let i = enemies.length - 1; i >= 0; i--) {
@@ -2823,9 +2897,9 @@ canvas.addEventListener('mousemove', e => {
   const rect = canvas.getBoundingClientRect();
   const scaleX = CW / rect.width;
   const scaleY = CH / rect.height;
-  if (_editorDragPowerup && powerup) {
-    powerup.x = Math.round(_editorDragPlatX0 + (e.clientX - _editorDragStartCX) * scaleX / 2);
-    powerup.y = Math.round(_editorDragPlatY0 + (e.clientY - _editorDragStartCY) * scaleY / 2);
+  if (_editorDragPowerupIdx >= 0 && powerups[_editorDragPowerupIdx]) {
+    powerups[_editorDragPowerupIdx].x = Math.round(_editorDragPlatX0 + (e.clientX - _editorDragStartCX) * scaleX / 2);
+    powerups[_editorDragPowerupIdx].y = Math.round(_editorDragPlatY0 + (e.clientY - _editorDragStartCY) * scaleY / 2);
     return;
   }
   if (!_editorDragActive || editorSelectedPlat < 0) return;
@@ -2834,7 +2908,7 @@ canvas.addEventListener('mousemove', e => {
   pl.y = Math.round(_editorDragPlatY0 + (e.clientY - _editorDragStartCY) * scaleY / 2);
 });
 
-canvas.addEventListener('mouseup', () => { _editorDragActive = false; _editorDragPowerup = false; });
+canvas.addEventListener('mouseup', () => { _editorDragActive = false; _editorDragPowerupIdx = -1; });
 
 document.getElementById('overlayBtn').addEventListener('click', beginCutscene);
 

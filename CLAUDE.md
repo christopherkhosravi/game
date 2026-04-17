@@ -1039,3 +1039,44 @@ The `dashGrace` path is now gated on `p.jumpCount === 0`. This preserves the int
 - Arrow keys are excluded from the ability input vars when `godMode` is true: `left/right/down/downP/jumpP/jumpH/jumpR` only check WASD+Space in god mode, so ArrowLeft/Right can't accidentally trigger movement, and ArrowUp can't trigger jump
 - Hazard check, fall-out kill, and R-key restart are all gated with `!godMode`
 - `killPlayer()` already had a `godMode` guard — unchanged
+
+## Powerup System — Reworked
+
+### Orb Visual — Soft Body Blob
+
+`drawPowerupOrb` replaced with an 8-point soft-body simulation. Constants (all in world units, inside the 2× scaled ctx):
+- `BLOB_N = 8` anchor points evenly spaced around a ring
+- `BLOB_R = 13` rest ring radius
+- `BLOB_DRAG = 0.55` how far player velocity displaces rest positions (higher = more trail)
+- `BLOB_SPRING = 0.22` spring stiffness
+- `BLOB_DAMP = 0.68` velocity damping per frame (lower = more overshoot/oscillation)
+
+Each frame:
+1. Smooth player velocity (`_powerupVx/vy`) with 0.25 lerp
+2. Per-point: compute rest position = ring angle + velocity drag offset; apply spring + damping to current position
+3. Build closed smooth path using quadratic bezier midpoints through the 8 points
+4. Draw 4 layers: outer halo (shadow blur 20), main fill (radial gradient white→cyan→blue + shadow), edge stroke, specular highlight
+
+Blob state (`_blobPts`) is reset on pickup collection, powerup expiry, respawn, and `startGame()`. The last 60 frames fade out (alpha = `powerupTimer / 60`).
+
+### Powerup Behaviour — Flight Mode
+
+The powerup no longer grants invincibility. Instead it gives 4 seconds of free directional flight:
+- **Gravity disabled**, all abilities cancelled for the duration (dash, float, jump, wall grab all zeroed out)
+- **Movement keys steer**: A/D or ArrowLeft/Right = horizontal flight, Space/W/ArrowUp = fly up, S/ArrowDown = fly down at `FLIGHT_SPD = 2.8` world units/frame with 0.80 friction decay
+- **Platform and wall collision** still applied normally (resolveX/Y with PLAYER_PHYS_H)
+- **Enemy contact kills normally** — invincibility guards removed from `checkHazards()`, `_tickCreatures()`, and boss body contact
+
+Implementation: the entire normal-physics block (dash → resolveX/Y → quake timer) is wrapped in `do { if (powerupTimer > 0) { /* flight */ break; } /* normal physics */ } while (false)`. The `break` exits the do-while, skipping normal physics. Post-physics code (fall-out, pickup, hazards, boss, win) runs for both paths unchanged.
+
+### Pickup Placement — Multiple Persistent Orbs
+
+- `let powerup = null` replaced by `let powerups = []` — array of `{x, y, w:12, h:12, active:true}`
+- `active = false` when collected; reset to `true` when timer expires, on respawn, or on restart
+- **No limit** in god mode: V places a new pickup at player body centre each press; V near an existing one removes it
+- **Click + drag** any pickup in god mode to reposition (supports array indexing via `_editorDragPowerupIdx`)
+- **E export** logs `let powerups = [...]` to console
+
+**Key variable changes:**
+- `_editorDragPowerup: bool` → `_editorDragPowerupIdx: number` (-1 = none, ≥0 = index)
+- `_blobPts` — blob anchor state, null between pickups
