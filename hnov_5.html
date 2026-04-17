@@ -2677,36 +2677,32 @@ function render() {
     ctx.save();
     ctx.lineWidth = 2;
     // player body ovals — head / torso / legs, tuned per animation state
-    // Sprite top in canvas px = (player.y + 8 - cam.y) * 2  (yOff=8 for all states)
-    // Sprite centre-x in canvas px = (player.x + 6 - cam.x) * 2  (player.w=12, so centre=+6)
+    // _sprTop = sprite top in canvas px (player.y+8, yOff=8 for all states)
+    // Format per oval: [cy, ry, rx, dx] — cy from _sprTop, dx from _sprCx, all canvas px
+    // null cy = skip that oval (jump/bounce: no legs)
+    // run: ovals staggered horizontally (dx) to trace the inverted-V body shape
     ctx.strokeStyle = '#ff6b9d';
     ctx.fillStyle = 'rgba(255,107,157,0.18)';
     const _sprCx  = (player.x + 6 - cam.x) * 2;
     const _sprTop = (player.y + 8 - cam.y) * 2;
-    // Each row: [head_cy, head_ry, head_rx,  torso_cy, torso_ry, torso_rx,  legs_cy, legs_ry, legs_rx]
-    // cy = offset from _sprTop in canvas px; ry/rx = ellipse semi-axes in canvas px
-    // run: crawl/four-legged pose — all parts lower and compressed vertically
-    // wall: body lower in frame (character hangs/presses against wall)
-    // dash: head lower and forward (leaning lean)
-    // float: head huge to cover parachute canopy
-    // jump/bounce: no legs oval (legs tucked, airborne)
     const _ov3 = {
-      idle:   [ 32,15,10,  77,25,12,  125,28, 9],
-      run:    [ 69,18,16,  90,16,16,  118,15,14], // hips top, trunk mid, head bottom (bent-over pose)
-      jump:   [ 48,14,10,  77,24,13,  null,0, 0],
-      fall:   [ 32,14,10,  72,22,13,  122,20,10],
-      float:  [ 40,48,55, 104,18,13,  133,16, 9], // large oval covers full parachute dome
-      bounce: [ 29,14,10,  67,22,15,  null,0, 0],
-      wall:   [ 53,14,10,  96,20,13,  128,18,10],
-      dash:   [ 32,15,11,  83,26,14,  131,25,10],
-      dying:  [ 36,16,14,  76,26,16,  120,20,12],
+      //          oval 1 (cy,ry,rx,dx)   oval 2              oval 3
+      idle:   [ 32,15,10, 0,   77,25,12, 0,   125,28, 9, 0],
+      run:    [ 44,28,14,-18,  66,20,18, 0,   119,15,13,27], // V: upper-left leg / hips / lower-right head
+      jump:   [ 48,14,10, 0,   77,24,13, 0,   null,0, 0, 0],
+      fall:   [ 32,14,10, 0,   72,22,13, 0,   122,20,10, 0],
+      float:  [ 40,36,42, 0,  104,18,13, 0,   133,16, 9, 0], // reduced parachute oval
+      bounce: [ 29,14,10, 0,   67,22,15, 0,   null,0, 0, 0],
+      wall:   [ 96,15,11, 0,  116,18,13, 0,   140,14,11, 0], // body sits low; head confirmed at cy=96
+      dash:   [ 32,15,11, 0,   83,26,14, 0,   131,25,10, 0],
+      dying:  [ 36,16,14, 0,   76,26,16, 0,   120,20,12, 0],
     };
-    const [_hcy,_hry,_hrx, _tcy,_try_,_trx, _lcy,_lry,_lrx] = _ov3[player.state] || _ov3.idle;
+    const [_hcy,_hry,_hrx,_hdx, _tcy,_try_,_trx,_tdx, _lcy,_lry,_lrx,_ldx] = _ov3[player.state] || _ov3.idle;
     const _noLegs = _lcy === null;
     ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.ellipse(_sprCx, _sprTop+_hcy, _hrx, _hry, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.ellipse(_sprCx, _sprTop+_tcy, _trx, _try_, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-    if (!_noLegs) { ctx.beginPath(); ctx.ellipse(_sprCx, _sprTop+_lcy, _lrx, _lry, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke(); }
+    ctx.beginPath(); ctx.ellipse(_sprCx+_hdx, _sprTop+_hcy, _hrx, _hry, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(_sprCx+_tdx, _sprTop+_tcy, _trx, _try_, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    if (!_noLegs) { ctx.beginPath(); ctx.ellipse(_sprCx+_ldx, _sprTop+_lcy, _lrx, _lry, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke(); }
     // boss hitbox
     if (bossActive || bossDeathPending) {
       const _b = bossData;
