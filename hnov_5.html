@@ -2691,15 +2691,15 @@ function render() {
     // float: head huge to cover parachute canopy
     // jump/bounce: no legs oval (legs tucked, airborne)
     const _ov3 = {
-      idle:   [28,16,14,  66,24,16,  110,20,12],
-      run:    [72,13,13,  90,13,18,  108,12,13],
-      jump:   [22,16,14,  58,22,16,  null,0,0],
-      fall:   [28,16,14,  64,22,16,  108,24,12],
-      float:  [22,34,30,  80,20,16,  116,20,12],
-      bounce: [18,16,14,  52,22,16,  null,0,0],
-      wall:   [46,16,14,  84,22,16,  124,20,12],
-      dash:   [50,16,14,  82,20,16,  116,20,12],
-      dying:  [36,16,14,  76,26,16,  120,20,12],
+      idle:   [ 32,15,10,  77,25,12,  125,28, 9],
+      run:    [ 69,18,16,  90,16,16,  118,15,14], // hips top, trunk mid, head bottom (bent-over pose)
+      jump:   [ 48,14,10,  77,24,13,  null,0, 0],
+      fall:   [ 32,14,10,  72,22,13,  122,20,10],
+      float:  [ 40,48,55, 104,18,13,  133,16, 9], // large oval covers full parachute dome
+      bounce: [ 29,14,10,  67,22,15,  null,0, 0],
+      wall:   [ 53,14,10,  96,20,13,  128,18,10],
+      dash:   [ 32,15,11,  83,26,14,  131,25,10],
+      dying:  [ 36,16,14,  76,26,16,  120,20,12],
     };
     const [_hcy,_hry,_hrx, _tcy,_try_,_trx, _lcy,_lry,_lrx] = _ov3[player.state] || _ov3.idle;
     const _noLegs = _lcy === null;
