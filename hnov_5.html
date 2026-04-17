@@ -1527,13 +1527,13 @@ const SPRITE_W = 60;
 const SPRITE_H = 80;
 
 // ─── SOFT-BODY BLOB ─────────────────────────────────────────────────────────
-// 8 anchor points arranged in a ring. Each point springs toward a rest position
-// that is offset opposite the player velocity, creating drag / wobble / jelly feel.
-const BLOB_N       = 8;
-const BLOB_R       = 13;   // rest ring radius (world units, inside 2× scaled ctx)
-const BLOB_DRAG    = 1.8;  // how far player velocity pulls rest positions back (higher = more trail)
-const BLOB_SPRING  = 0.06; // spring stiffness (lower = softer, slower return = more wobble)
-const BLOB_DAMP    = 0.88; // per-frame velocity retention (higher = more overshoot/oscillation)
+// 10 anchor points in a ring. Each springs toward a rest position offset opposite
+// player velocity — large drag creates a dramatic water-drop / teardrop deformation.
+const BLOB_N       = 10;
+const BLOB_R       = 16;   // rest ring radius (world units, inside 2× scaled ctx)
+const BLOB_DRAG    = 5.0;  // large: trailing anchors pushed ~14 units back at flight speed
+const BLOB_SPRING  = 0.04; // very soft — slow, fluid return to sphere when stopping
+const BLOB_DAMP    = 0.90; // light damping — gentle oscillation / wobble on stop
 
 function _initBlobPts(cx, cy) {
   _blobPts = [];
@@ -1543,22 +1543,22 @@ function _initBlobPts(cx, cy) {
   }
 }
 
-// Draws the powerup orb — a soft-body blob that wobbles with player movement.
-// Each of the 8 spring anchor points is drawn as an individual glowing ball.
-// When moving, trailing anchors lag behind and spread visibly, making the deformation obvious.
+// Draws the powerup orb — a water/slime drop that deforms with movement.
+// One smooth bezier shape: round ball at rest, teardrop when moving.
 // Called inside the 2× scaled ctx, so all coords are world units.
 function drawPowerupOrb(wx, wy, pw, ph, vx, vy) {
-  // Responsive velocity tracking — fast enough to react within ~3 frames
-  _powerupVx += (vx - _powerupVx) * 0.55;
-  _powerupVy += (vy - _powerupVy) * 0.55;
+  // Moderate smoothing — fluid but responsive
+  _powerupVx += (vx - _powerupVx) * 0.35;
+  _powerupVy += (vy - _powerupVy) * 0.35;
 
-  // Orb centre: horizontal midpoint, vertical body centre
   const cx = wx + pw / 2;
   const cy = wy + PLAYER_PHYS_H / 2;
 
   if (!_blobPts) _initBlobPts(cx, cy);
 
-  // Spring each anchor toward its rest position, offset back by velocity (trailing drag)
+  // Spring each anchor toward rest position offset back by velocity.
+  // Large BLOB_DRAG means trailing anchors are pulled far behind centre,
+  // creating a dramatic teardrop/water-drop silhouette at flight speed.
   for (let i = 0; i < BLOB_N; i++) {
     const a = (i / BLOB_N) * Math.PI * 2;
     const restX = cx + Math.cos(a) * BLOB_R - _powerupVx * BLOB_DRAG;
@@ -1572,10 +1572,9 @@ function drawPowerupOrb(wx, wy, pw, ph, vx, vy) {
     pt.cy += pt.vy;
   }
 
-  // Fade out in the last second (60 frames)
   const fadeAlpha = powerupTimer < 60 ? powerupTimer / 60 : 1;
 
-  // Build a smooth closed path through anchor points (bezier midpoints)
+  // One smooth closed shape through all anchor points
   const blobPath = () => {
     ctx.beginPath();
     const last = _blobPts[BLOB_N - 1];
@@ -1589,49 +1588,56 @@ function drawPowerupOrb(wx, wy, pw, ph, vx, vy) {
     ctx.closePath();
   };
 
+  // Centroid of actual anchor positions (follows the deformed shape)
+  let bcx = 0, bcy = 0;
+  for (const pt of _blobPts) { bcx += pt.cx; bcy += pt.cy; }
+  bcx /= BLOB_N; bcy /= BLOB_N;
+
   ctx.save();
   ctx.globalAlpha = fadeAlpha;
 
-  // Layer 1 — individual glowing balls at each anchor point.
-  // These overlap to form the body and visibly spread apart when moving = organic goo feel.
-  ctx.shadowColor = '#00ffee';
-  ctx.shadowBlur = 14;
-  for (const pt of _blobPts) {
-    const bg = ctx.createRadialGradient(pt.cx - 1.5, pt.cy - 1.5, 0, pt.cx, pt.cy, 10);
-    bg.addColorStop(0,   'rgba(230,255,255,0.95)');
-    bg.addColorStop(0.4, 'rgba(10,190,255,0.88)');
-    bg.addColorStop(1,   'rgba(0,50,210,0.0)');
-    ctx.fillStyle = bg;
-    ctx.beginPath();
-    ctx.arc(pt.cx, pt.cy, 10, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Layer 2 — blob outline connecting the deformed shape
+  // Layer 1 — outer glow halo
   blobPath();
-  ctx.strokeStyle = 'rgba(180,255,255,0.75)';
-  ctx.lineWidth = 0.8;
-  ctx.shadowColor = 'rgba(0,255,220,0.95)';
-  ctx.shadowBlur = 6;
-  ctx.stroke();
-
-  // Layer 3 — bright centre core (locked to logical centre, not the deformed blob)
-  ctx.shadowBlur = 10;
-  const cg = ctx.createRadialGradient(cx - 1.5, cy - 1.5, 0, cx, cy, BLOB_R * 0.55);
-  cg.addColorStop(0,    'rgba(255,255,255,0.98)');
-  cg.addColorStop(0.35, 'rgba(160,255,240,0.85)');
-  cg.addColorStop(1,    'rgba(0,100,255,0)');
-  ctx.fillStyle = cg;
-  ctx.beginPath();
-  ctx.arc(cx, cy, BLOB_R * 0.6, 0, Math.PI * 2);
+  ctx.shadowColor = '#00ffee';
+  ctx.shadowBlur = 22;
+  ctx.fillStyle = 'rgba(0,190,255,0.13)';
   ctx.fill();
+
+  // Layer 2 — main water-drop fill.
+  // Gradient origin shifts toward the leading edge (opposite of velocity drag)
+  // so the front of the drop looks bright/lit and the tail looks deep blue.
+  const gInX = bcx - _powerupVx * 1.8;
+  const gInY = bcy - _powerupVy * 1.8;
+  const grad = ctx.createRadialGradient(gInX, gInY, 0, bcx, bcy, BLOB_R * 1.4);
+  grad.addColorStop(0,    '#ffffff');
+  grad.addColorStop(0.12, '#ddfffe');
+  grad.addColorStop(0.38, '#00ccff');
+  grad.addColorStop(0.72, '#0055cc');
+  grad.addColorStop(1,    '#001880');
+  blobPath();
+  ctx.fillStyle = grad;
+  ctx.shadowColor = '#00ffcc';
+  ctx.shadowBlur = 10;
+  ctx.fill();
+
+  // Layer 3 — glowing rim
+  blobPath();
+  ctx.strokeStyle = 'rgba(150,255,255,0.82)';
+  ctx.lineWidth = 0.7;
+  ctx.shadowColor = 'rgba(0,255,230,0.9)';
+  ctx.shadowBlur = 5;
+  ctx.stroke();
 
   ctx.shadowBlur = 0;
 
-  // Layer 4 — specular highlight
-  ctx.fillStyle = 'rgba(255,255,255,0.82)';
+  // Layer 4 — specular highlight, positioned on the leading face
+  const specX = cx - _powerupVx * 0.9;
+  const specY = cy - _powerupVy * 0.9;
+  ctx.fillStyle = 'rgba(255,255,255,0.88)';
   ctx.beginPath();
-  ctx.ellipse(cx - BLOB_R * 0.28, cy - BLOB_R * 0.30, BLOB_R * 0.20, BLOB_R * 0.11, -0.5, 0, Math.PI * 2);
+  ctx.ellipse(specX - BLOB_R * 0.18, specY - BLOB_R * 0.20,
+              BLOB_R * 0.22, BLOB_R * 0.12,
+              Math.atan2(_powerupVy, _powerupVx) + Math.PI / 2, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.restore();
@@ -2679,22 +2685,28 @@ function render() {
     const _sprTop = (player.y + 8 - cam.y) * 2;
     // Each row: [head_cy, head_ry, head_rx,  torso_cy, torso_ry, torso_rx,  legs_cy, legs_ry, legs_rx]
     // cy = offset from _sprTop in canvas px; ry/rx = ellipse semi-axes in canvas px
+    // run: crawl/four-legged pose — all parts lower and compressed vertically
+    // wall: body lower in frame (character hangs/presses against wall)
+    // dash: head lower and forward (leaning lean)
+    // float: head huge to cover parachute canopy
+    // jump/bounce: no legs oval (legs tucked, airborne)
     const _ov3 = {
       idle:   [28,16,14,  66,24,16,  110,20,12],
-      run:    [28,16,14,  64,22,16,  108,22,12],
-      jump:   [22,16,14,  58,22,16,  104,24,12],
+      run:    [72,13,13,  90,13,18,  108,12,13],
+      jump:   [22,16,14,  58,22,16,  null,0,0],
       fall:   [28,16,14,  64,22,16,  108,24,12],
-      float:  [34,16,14,  72,22,16,  114,22,12],
-      bounce: [18,16,14,  52,22,16,   98,24,12],
-      wall:   [28,16,14,  68,22,16,  112,22,12],
-      dash:   [34,16,14,  70,20,16,  112,20,12],
+      float:  [22,34,30,  80,20,16,  116,20,12],
+      bounce: [18,16,14,  52,22,16,  null,0,0],
+      wall:   [46,16,14,  84,22,16,  124,20,12],
+      dash:   [50,16,14,  82,20,16,  116,20,12],
       dying:  [36,16,14,  76,26,16,  120,20,12],
     };
     const [_hcy,_hry,_hrx, _tcy,_try_,_trx, _lcy,_lry,_lrx] = _ov3[player.state] || _ov3.idle;
+    const _noLegs = _lcy === null;
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.ellipse(_sprCx, _sprTop+_hcy, _hrx, _hry, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
     ctx.beginPath(); ctx.ellipse(_sprCx, _sprTop+_tcy, _trx, _try_, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.ellipse(_sprCx, _sprTop+_lcy, _lrx, _lry, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    if (!_noLegs) { ctx.beginPath(); ctx.ellipse(_sprCx, _sprTop+_lcy, _lrx, _lry, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke(); }
     // boss hitbox
     if (bossActive || bossDeathPending) {
       const _b = bossData;
