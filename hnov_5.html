@@ -2676,37 +2676,41 @@ function render() {
     // — hitbox overlays —
     ctx.save();
     ctx.lineWidth = 2;
-    // player body ovals — head / torso / legs, tuned per animation state
-    // Sprite top in canvas px = (player.y + 8 - cam.y) * 2  (yOff=8 for all states)
-    // Sprite centre-x in canvas px = (player.x + 6 - cam.x) * 2  (player.w=12, so centre=+6)
+    // Actual hurtbox — thin yellow outline showing exactly what checkHazards uses.
+    // This is the ground truth: player.x/y/w/h in canvas pixels.
+    const _sprCx   = (player.x + 6 - cam.x) * 2;  // sprite/hurtbox horizontal centre
+    const _hboxTop = (player.y - cam.y) * 2;        // actual hurtbox top (player.y)
+    ctx.strokeStyle = 'rgba(255,255,0,0.9)';
+    ctx.fillStyle   = 'rgba(255,255,0,0.06)';
+    ctx.lineWidth = 1;
+    ctx.fillRect  ((player.x - cam.x) * 2, _hboxTop, player.w * 2, player.h * 2);
+    ctx.strokeRect((player.x - cam.x) * 2, _hboxTop, player.w * 2, player.h * 2);
+
+    // player body ovals — head / torso / legs, tuned per animation state.
+    // Anchored to _hboxTop (= player.y) so they align with the yellow kill rectangle.
+    // cy = offset from _hboxTop in canvas px (sprite top is _hboxTop+16 due to yOff=8).
+    // run: hips top, trunk mid, head bottom (bent-over pose)
+    // float: large head oval covers full parachute dome
+    // jump/bounce: no legs oval
     ctx.strokeStyle = '#ff6b9d';
-    ctx.fillStyle = 'rgba(255,107,157,0.18)';
-    const _sprCx  = (player.x + 6 - cam.x) * 2;
-    const _sprTop = (player.y + 8 - cam.y) * 2;
-    // Each row: [head_cy, head_ry, head_rx,  torso_cy, torso_ry, torso_rx,  legs_cy, legs_ry, legs_rx]
-    // cy = offset from _sprTop in canvas px; ry/rx = ellipse semi-axes in canvas px
-    // run: crawl/four-legged pose — all parts lower and compressed vertically
-    // wall: body lower in frame (character hangs/presses against wall)
-    // dash: head lower and forward (leaning lean)
-    // float: head huge to cover parachute canopy
-    // jump/bounce: no legs oval (legs tucked, airborne)
+    ctx.fillStyle   = 'rgba(255,107,157,0.18)';
     const _ov3 = {
-      idle:   [ 32,15,10,  77,25,12,  125,28, 9],
-      run:    [ 69,18,16,  90,16,16,  118,15,14], // hips top, trunk mid, head bottom (bent-over pose)
-      jump:   [ 48,14,10,  77,24,13,  null,0, 0],
-      fall:   [ 32,14,10,  72,22,13,  122,20,10],
-      float:  [ 40,48,55, 104,18,13,  133,16, 9], // large oval covers full parachute dome
-      bounce: [ 29,14,10,  67,22,15,  null,0, 0],
-      wall:   [ 53,14,10,  96,20,13,  128,18,10],
-      dash:   [ 32,15,11,  83,26,14,  131,25,10],
-      dying:  [ 36,16,14,  76,26,16,  120,20,12],
+      idle:   [ 16,15,10,  61,25,12,  109,28, 9],
+      run:    [ 53,18,16,  74,16,16,  102,15,14],
+      jump:   [ 32,14,10,  61,24,13,  null,0, 0],
+      fall:   [ 16,14,10,  56,22,13,  106,20,10],
+      float:  [ 24,48,55,  88,18,13,  117,16, 9],
+      bounce: [ 13,14,10,  51,22,15,  null,0, 0],
+      wall:   [ 37,14,10,  80,20,13,  112,18,10],
+      dash:   [ 16,15,11,  67,26,14,  115,25,10],
+      dying:  [ 20,16,14,  60,26,16,  104,20,12],
     };
     const [_hcy,_hry,_hrx, _tcy,_try_,_trx, _lcy,_lry,_lrx] = _ov3[player.state] || _ov3.idle;
     const _noLegs = _lcy === null;
     ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.ellipse(_sprCx, _sprTop+_hcy, _hrx, _hry, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.ellipse(_sprCx, _sprTop+_tcy, _trx, _try_, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-    if (!_noLegs) { ctx.beginPath(); ctx.ellipse(_sprCx, _sprTop+_lcy, _lrx, _lry, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke(); }
+    ctx.beginPath(); ctx.ellipse(_sprCx, _hboxTop+_hcy, _hrx, _hry, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(_sprCx, _hboxTop+_tcy, _trx, _try_, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    if (!_noLegs) { ctx.beginPath(); ctx.ellipse(_sprCx, _hboxTop+_lcy, _lrx, _lry, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke(); }
     // boss hitbox
     if (bossActive || bossDeathPending) {
       const _b = bossData;
