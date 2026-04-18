@@ -1080,3 +1080,66 @@ Implementation: the entire normal-physics block (dash → resolveX/Y → quake t
 **Key variable changes:**
 - `_editorDragPowerup: bool` → `_editorDragPowerupIdx: number` (-1 = none, ≥0 = index)
 - `_blobPts` — blob anchor state, null between pickups
+
+## Oval Hurtbox System
+
+### Architecture
+
+**Physics hitbox (unchanged):** Rectangle `(player.x, player.y, player.w=12, PLAYER_PHYS_H=56)` — used by `resolveX`/`resolveY` for platforms, walls, floor. Not touched.
+
+**Hurtbox (ellipse):** Three overlapping ovals per animation state, defined in `PLAYER_OVALS` constant (near SPRITE_DEFS). All damage detection (spikes, boss body, attack creatures/crows) uses `playerOvalsHitRect()` instead of `rectsOverlap()`.
+
+### PLAYER_OVALS constant
+
+Defined immediately before the sprite pre-load loop. Format per row:
+```
+[headCy, headRy, headRx, headDx,  torsoCy, torsoRy, torsoRx, torsoDx,  legsCy, legsRy, legsRx, legsDx]
+```
+All values in **canvas pixels**. Anchored to:
+- `_sprCx = (player.x + 6 - cam.x) * 2` (sprite horizontal center, canvas px)
+- `_sprTop = (player.y + 8 - cam.y) * 2` (sprite top, canvas px)
+
+Oval center: `(_sprCx + dx, _sprTop + cy)`. Null `legsCy` = no legs oval (jump/bounce).
+
+**Wall state note:** Wall sprite is drawn at `scale=0.85`, so sprite top is at `_sprTop + 24`. The `cy` values in `wall:` already include this offset.
+
+### Measured oval values
+
+Derived from per-pixel bounding box analysis of each sprite PNG (Pillow, alpha threshold=10):
+
+| State | Source | Head cy/ry/rx/dx | Torso cy/ry/rx/dx | Legs cy/ry/rx/dx |
+|-------|--------|-----------------|------------------|-----------------|
+| run | run/1-3.png | 77/20/19/-12 | 112/24/30/0 | 143/14/43/0 |
+| wall | wall grab/1.png (scale=0.85, +24 offset) | 55/14/17/-6 | 97/28/19/-6 | 138/14/11/-6 |
+
+**Run measurement notes:**
+- Frame 1: content rows 410–967 (canvas 64–151 from `_sprTop`); head center at canvas cy≈75, dx≈-16
+- Frame 2: content rows 402–959 (canvas 63–150); head center cy≈74, dx≈-10
+- Frame 3: content rows 535–969 (canvas 84–151); wide body pose (arms/legs spread, rx≈39–51)
+- Ovals chosen to cover the union across all 3 frames; ry=20 on head ensures frame-3 top (cy≈84) is captured
+
+**Wall measurement notes:**
+- Content rows 128–966 in 1024px source → canvas 41–152 from `_sprTop` (including +24 offset)
+- Previous ovals (cy=96/116/140) missed the head entirely; head occupies cy=41–69
+- All three ovals have dx=-6 (body slightly left of sprite center in source)
+
+### Horizontal mirroring
+
+Run sprite flips on `!facingRight`; wall/dash sprites flip on `facingRight` (they're in `mirrorStates`). The `dx` offset must be negated when the sprite is flipped, otherwise ovals track the wrong side.
+
+**In god mode display** (render block): `_flipOv = ['wall','dash'].includes(player.state) ? player.facingRight : !player.facingRight`, then `_hofs = _flipOv ? -_hdx : _hdx` etc.
+
+**In `playerOvalsHitRect()`**: same flip logic applied per-check before computing oval center.
+
+### playerOvalsHitRect(rx0, ry0, rw, rh)
+
+Placed immediately before `checkHazards()`. Converts canvas-pixel oval params to world units (`/ 2`), then for each of the 3 ovals runs the ellipse-vs-closest-point test:
+```
+closestX = clamp(rx0, rx0+rw, ovalCx)
+closestY = clamp(ry0, ry0+rh, ovalCy)
+hit = ((closestX-ovalCx)/ovalRx)² + ((closestY-ovalCy)/ovalRy)² ≤ 1
+```
+Returns true if any oval hits. Used by:
+- `checkHazards()` — spike enemies
+- `_tickCreatures()` — boss attack creatures (crows)
+- `updateBoss()` body contact check

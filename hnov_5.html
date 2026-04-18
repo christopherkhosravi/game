@@ -972,6 +972,27 @@ function update() {
   updateCamera();
 }
 
+// Returns true if any of the player's hurtbox ovals (from PLAYER_OVALS) intersects the given
+// axis-aligned rectangle (world coordinates). Uses ellipse-vs-closest-point test.
+function playerOvalsHitRect(rx0, ry0, rw, rh) {
+  const p = player;
+  const ov = PLAYER_OVALS[p.state] || PLAYER_OVALS.idle;
+  const [hcy,hry,hrx,hdx, tcy,try_,trx,tdx, lcy,lry,lrx,ldx] = ov;
+  const flip = ['wall','dash'].includes(p.state) ? p.facingRight : !p.facingRight;
+  const scx = p.x + 6, sty = p.y + 8; // world-space sprite center-x and sprite-top-y
+  function check(cy, ery, erx, dx) {
+    if (cy === null) return false;
+    const ofs = flip ? -dx : dx;
+    const ex = scx + ofs / 2, ey = sty + cy / 2; // oval center in world (canvas / 2)
+    const arx = erx / 2, ary = ery / 2;           // oval radii in world
+    const cx = Math.max(rx0, Math.min(rx0 + rw, ex));
+    const cy2 = Math.max(ry0, Math.min(ry0 + rh, ey));
+    const ddx = (cx - ex) / arx, ddy = (cy2 - ey) / ary;
+    return ddx * ddx + ddy * ddy <= 1;
+  }
+  return check(hcy,hry,hrx,hdx) || check(tcy,try_,trx,tdx) || check(lcy,lry,lrx,ldx);
+}
+
 function checkHazards() {
   const p = player;
   // hazard gates
@@ -992,7 +1013,7 @@ function checkHazards() {
   // enemies — flight powerup grants invincibility against spikes/enemies
   if (powerupTimer > 0) return;
   for (const e of enemies) {
-    if (rectsOverlap(p.x+2,p.y+2,p.w-4,p.h-4, e.x,e.y,e.w,e.h)) {
+    if (playerOvalsHitRect(e.x, e.y, e.w, e.h)) {
       p.dead = true;
       p.state = 'dying';
       p.animFrame = 0;
@@ -1187,7 +1208,7 @@ function updateBoss() {
         cr.x += cr.vx;
       }
       if (!player.dead && player.dashTimer === 0 && powerupTimer === 0 &&
-          rectsOverlap(player.x, player.y, player.w, player.h, cr.x, cr.y, CREATURE_W, CREATURE_H)) {
+          playerOvalsHitRect(cr.x, cr.y, CREATURE_W, CREATURE_H)) {
         killPlayer();
       }
       if (cr.type === 'circle') return cr.cvx < 0 ? cr.cx + cr.radius > 0 : cr.cx - cr.radius < LW;
@@ -1338,7 +1359,7 @@ function updateBoss() {
   }
 
   // Boss body contact kills player regardless of phase (unless powered up)
-  if (!player.dead && rectsOverlap(player.x + 2, player.y + 2, player.w - 4, player.h - 4, b.x, b.y, b.w, b.h)) {
+  if (!player.dead && playerOvalsHitRect(b.x, b.y, b.w, b.h)) {
     killPlayer();
   }
   updateBossAnim(b);
@@ -1379,6 +1400,24 @@ const SPRITE_DEFS = {
   wall:   { folder: 'wall grab', frames: 1, loop: true,  yOff: 8, scale: 0.85 },
   dash:   { folder: 'dash',      frames: 2, loop: true,  yOff: 8 },
   dying:  { folder: 'dying',     frames: 4, loop: false, yOff: 8 },
+};
+
+// Hurtbox ovals per animation state — canvas-pixel offsets from sprite anchor.
+// Format per row: [headCy,headRy,headRx,headDx, torsoCy,torsoRy,torsoRx,torsoDx, legsCy,legsRy,legsRx,legsDx]
+// All values are canvas pixels (divide by 2 for world units). null legsCy = no legs oval.
+// Measured from actual per-frame pixel bounding boxes (run/1-3.png, wall grab/1.png via Pillow).
+// _sprTop = (player.y+8-cam.y)*2 (sprite top canvas px). _sprCx = (player.x+6-cam.x)*2 (sprite center x).
+// Wall state drawn at scale=0.85 → sprite top is at _sprTop+24; cy values already include this offset.
+const PLAYER_OVALS = {
+  idle:   [ 32,15,10, 0,   77,25,12, 0,   125,28, 9, 0],
+  run:    [ 77,20,19,-12,  112,24,30, 0,   143,14,43, 0],
+  jump:   [ 48,14,10, 0,   77,24,13, 0,   null,0, 0, 0],
+  fall:   [ 32,14,10, 0,   72,22,13, 0,   122,20,10, 0],
+  float:  [ 40,36,42, 0,  104,18,13, 0,   133,16, 9, 0],
+  bounce: [ 29,14,10, 0,   67,22,15, 0,   null,0, 0, 0],
+  wall:   [ 55,14,17,-6,   97,28,19,-6,   138,14,11,-6],
+  dash:   [ 32,15,11, 0,   83,26,14, 0,   131,25,10, 0],
+  dying:  [ 36,16,14, 0,   76,26,16, 0,   120,20,12, 0],
 };
 
 // Pre-load all PNG frames; keyed by folder name to avoid duplicate loads
@@ -2685,24 +2724,17 @@ function render() {
     ctx.fillStyle = 'rgba(255,107,157,0.18)';
     const _sprCx  = (player.x + 6 - cam.x) * 2;
     const _sprTop = (player.y + 8 - cam.y) * 2;
-    const _ov3 = {
-      //          oval 1 (cy,ry,rx,dx)   oval 2              oval 3
-      idle:   [ 32,15,10, 0,   77,25,12, 0,   125,28, 9, 0],
-      run:    [ 44,28,14,-18,  66,20,18, 0,   119,15,13,27], // V: upper-left leg / hips / lower-right head
-      jump:   [ 48,14,10, 0,   77,24,13, 0,   null,0, 0, 0],
-      fall:   [ 32,14,10, 0,   72,22,13, 0,   122,20,10, 0],
-      float:  [ 40,36,42, 0,  104,18,13, 0,   133,16, 9, 0], // reduced parachute oval
-      bounce: [ 29,14,10, 0,   67,22,15, 0,   null,0, 0, 0],
-      wall:   [ 96,15,11, 0,  116,18,13, 0,   140,14,11, 0], // body sits low; head confirmed at cy=96
-      dash:   [ 32,15,11, 0,   83,26,14, 0,   131,25,10, 0],
-      dying:  [ 36,16,14, 0,   76,26,16, 0,   120,20,12, 0],
-    };
-    const [_hcy,_hry,_hrx,_hdx, _tcy,_try_,_trx,_tdx, _lcy,_lry,_lrx,_ldx] = _ov3[player.state] || _ov3.idle;
+    const [_hcy,_hry,_hrx,_hdx, _tcy,_try_,_trx,_tdx, _lcy,_lry,_lrx,_ldx] = PLAYER_OVALS[player.state] || PLAYER_OVALS.idle;
+    // Mirror dx when the sprite is flipped (run flips on !facingRight; wall/dash flip on facingRight)
+    const _flipOv = ['wall','dash'].includes(player.state) ? player.facingRight : !player.facingRight;
+    const _hofs = _flipOv ? -_hdx : _hdx;
+    const _tofs = _flipOv ? -_tdx : _tdx;
+    const _lofs = _flipOv ? -_ldx : _ldx;
     const _noLegs = _lcy === null;
     ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.ellipse(_sprCx+_hdx, _sprTop+_hcy, _hrx, _hry, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.ellipse(_sprCx+_tdx, _sprTop+_tcy, _trx, _try_, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-    if (!_noLegs) { ctx.beginPath(); ctx.ellipse(_sprCx+_ldx, _sprTop+_lcy, _lrx, _lry, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke(); }
+    ctx.beginPath(); ctx.ellipse(_sprCx+_hofs, _sprTop+_hcy, _hrx, _hry, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(_sprCx+_tofs, _sprTop+_tcy, _trx, _try_, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    if (!_noLegs) { ctx.beginPath(); ctx.ellipse(_sprCx+_lofs, _sprTop+_lcy, _lrx, _lry, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke(); }
     // boss hitbox
     if (bossActive || bossDeathPending) {
       const _b = bossData;
