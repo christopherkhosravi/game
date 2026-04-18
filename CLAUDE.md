@@ -1099,29 +1099,40 @@ All values in **canvas pixels**. Anchored to:
 - `_sprCx = (player.x + 6 - cam.x) * 2` (sprite horizontal center, canvas px)
 - `_sprTop = (player.y + 8 - cam.y) * 2` (sprite top, canvas px)
 
-Oval center: `(_sprCx + dx, _sprTop + cy)`. Null `legsCy` = no legs oval (jump/bounce).
+Oval center: `(_sprCx + dx, _sprTop + cy)`. All states now have three numeric ovals (no null legs).
 
 **Wall state note:** Wall sprite is drawn at `scale=0.85`, so sprite top is at `_sprTop + 24`. The `cy` values in `wall:` already include this offset.
 
-### Measured oval values
+### Measured oval values (all states)
 
-Derived from per-pixel bounding box analysis of each sprite PNG (Pillow, alpha threshold=10):
+Derived from per-pixel bounding box analysis (Pillow, alpha threshold=10) on every frame of every animation. Values chosen to cover the union of all frames for each state.
 
-| State | Source | Head cy/ry/rx/dx | Torso cy/ry/rx/dx | Legs cy/ry/rx/dx |
+| State | Frames | Head cy/ry/rx/dx | Torso cy/ry/rx/dx | Legs cy/ry/rx/dx |
 |-------|--------|-----------------|------------------|-----------------|
-| run | run/1-3.png | 77/20/19/-12 | 112/24/30/0 | 143/14/43/0 |
+| idle | idle/1–4.png | 27/18/20/0 | 81/35/22/0 | 134/18/19/0 |
+| run | run/1–3.png | 77/20/19/-12 | 112/24/30/0 | 143/14/43/0 |
+| jump | jump/1–2.png | 21/12/23/0 | 52/22/30/0 | 86/20/28/0 |
+| fall | jump/3–4.png | 30/19/24/0 | 82/35/22/0 | 134/18/20/-6 |
+| float | dead hang/1.png | 29/18/36/0 | 82/35/36/0 | 136/18/18/8 |
+| bounce | bounce/2–3.png | 14/12/40/0 | 43/19/48/0 | 71/10/29/0 |
 | wall | wall grab/1.png (scale=0.85, +24 offset) | 55/14/17/-6 | 97/28/19/-6 | 138/14/11/-6 |
+| dash | dash/1–2.png | 32/30/38/-10 | 86/33/22/-4 | 139/21/48/-5 |
+| dying | dying/1–4.png | 64/18/30/-5 | 102/26/31/-4 | 139/14/29/1 |
 
-**Run measurement notes:**
-- Frame 1: content rows 410–967 (canvas 64–151 from `_sprTop`); head center at canvas cy≈75, dx≈-16
-- Frame 2: content rows 402–959 (canvas 63–150); head center cy≈74, dx≈-10
-- Frame 3: content rows 535–969 (canvas 84–151); wide body pose (arms/legs spread, rx≈39–51)
-- Ovals chosen to cover the union across all 3 frames; ry=20 on head ensures frame-3 top (cy≈84) is captured
+**Key corrections vs previous ovals:**
+- **idle**: torso ry 25→35 (actual measured); legs cy 125→134
+- **jump**: head cy 48→21 (was above sprite content); legs previously null, now measured at cy=86
+- **fall**: head ry 14→19, torso ry 22→35; legs rx 10→20 (actual narrow hanging legs, centered at dx=-6 to cover both frames)
+- **float**: head cy 40→29, ry 36→18 (previous ry=36 was twice the actual head height); legs cy 133→136, rx 9→18
+- **bounce**: head cy 29→14, ry 14→12 (content starts at cy≈4); legs previously null, now at cy=71
+- **dash**: head ry 15→30, rx 11→38 (arm/cape spread); legs rx 10→48 (frame 1 measures rx≈60 with cape)
+- **dying**: head cy 36→64 (content doesn't start until cy≈48–91 as character falls); all ovals shifted down
 
-**Wall measurement notes:**
-- Content rows 128–966 in 1024px source → canvas 41–152 from `_sprTop` (including +24 offset)
-- Previous ovals (cy=96/116/140) missed the head entirely; head occupies cy=41–69
-- All three ovals have dx=-6 (body slightly left of sprite center in source)
+**Measurement methodology per state:**
+- All source PNGs are 1024×1024, drawn at 120×160 canvas px (60×80 world ×2)
+- Canvas scale: 0.1172 x-px per source col, 0.1563 y-px per source row
+- Body divided into top-25% (head), mid-50% (torso), bot-25% (legs) per frame
+- Union taken across all frames; ovals sized to cover the union bounding box
 
 ### Horizontal mirroring
 
