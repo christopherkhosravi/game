@@ -462,6 +462,17 @@ let _editorDragPlatY0 = 0;
 let _editorExportMsg = 0;     // frames remaining to show "Exported to console"
 let _editorDragPowerupIdx = -1; // index into powerups[] being dragged, -1 = none
 
+// — patrol & ambush creatures —
+let patrolCreatures = [];   // {waypoints,x,y,vx,vy,phase,wpIdx,chaseTimer,animT,animFrame,facingRight}
+let ambushCreatures = [];   // {ox,oy,x,y,vx,vy,phase,chaseTimer,animT,animFrame,facingRight}
+const TRIGGER_DIST       = 200;  // world units — player proximity to trigger chase
+const PATROL_SPEED       = 0.8;  // world units/frame — patrol movement
+const CREATURE_CHASE_SPD = 2.5;  // world units/frame — chase + flyoff speed
+const CREATURE_CHASE_DUR = 120;  // frames — how long creature tracks player (2 s)
+// god-mode patrol waypoint placement
+let _patrolWptMode = false;  // true while placing patrol waypoints
+let _patrolWpts    = [];     // [{x,y}] pending waypoints not yet spawned
+
 // cutscene
 let cutsceneClip = 0;
 let cutsceneExiting = false;
@@ -599,8 +610,8 @@ function update() {
         powerups.push({ x: px, y: py, w: pw, h: ph, active: true });
       }
     }
-    // editor: E exports current spike array + platform positions to console
-    if (justPressed['KeyE']) {
+    // editor: P exports level data to console
+    if (justPressed['KeyP']) {
       console.log('%c=== SPIKE ARRAY ===', 'color:#ff6b9d;font-weight:bold');
       console.log('const enemies = ' + JSON.stringify(enemies, null, 2) + ';');
       console.log('%c=== PLATFORM POSITIONS ===', 'color:#ff6b9d;font-weight:bold');
@@ -609,9 +620,39 @@ function update() {
       console.log('%c=== POWERUPS ===', 'color:#00ffcc;font-weight:bold');
       const _puLines = powerups.map(pu => `  {x:${pu.x}, y:${pu.y}, w:${pu.w}, h:${pu.h}, active:true}`).join(',\n');
       console.log('let powerups = [\n' + _puLines + '\n];');
+      console.log('%c=== PATROL CREATURES ===', 'color:#00ffcc;font-weight:bold');
+      const _pcLines = patrolCreatures.map(pc => `  {waypoints:${JSON.stringify(pc.waypoints)}, facingRight:false, animFrame:0, animT:0, x:${pc.waypoints[0].x}, y:${pc.waypoints[0].y}, vx:0, vy:0, phase:'patrol', wpIdx:0, chaseTimer:0}`).join(',\n');
+      console.log('let patrolCreatures = [\n' + _pcLines + '\n];');
+      console.log('%c=== AMBUSH CREATURES ===', 'color:#00ffcc;font-weight:bold');
+      const _acLines = ambushCreatures.map(ac => `  {ox:${ac.ox}, oy:${ac.oy}, x:${ac.ox}, y:${ac.oy}, vx:0, vy:0, phase:'wait', chaseTimer:0, facingRight:false, animFrame:0, animT:0}`).join(',\n');
+      console.log('let ambushCreatures = [\n' + _acLines + '\n];');
       _editorExportMsg = 120;
     }
     if (_editorExportMsg > 0) _editorExportMsg--;
+    // C places an ambush creature at player centre
+    if (justPressed['KeyC']) {
+      ambushCreatures.push({
+        ox: Math.round(player.x + player.w/2 - CREATURE_W/2),
+        oy: Math.round(player.y + PLAYER_PHYS_H/2 - CREATURE_H/2),
+        x: Math.round(player.x + player.w/2 - CREATURE_W/2),
+        y: Math.round(player.y + PLAYER_PHYS_H/2 - CREATURE_H/2),
+        vx:0, vy:0, phase:'wait', chaseTimer:0, facingRight:false, animFrame:0, animT:0
+      });
+    }
+    // Z toggles patrol waypoint placement mode; X confirms spawn (>=2 waypoints required)
+    if (justPressed['KeyZ']) {
+      if (_patrolWptMode) { _patrolWptMode = false; _patrolWpts = []; }
+      else { _patrolWptMode = true; _patrolWpts = []; }
+    }
+    if (justPressed['KeyX'] && _patrolWptMode && _patrolWpts.length >= 2) {
+      const firstWp = _patrolWpts[0];
+      patrolCreatures.push({
+        waypoints: _patrolWpts.map(wp => ({x:wp.x, y:wp.y})),
+        x: firstWp.x, y: firstWp.y,
+        vx:0, vy:0, phase:'patrol', wpIdx:0, chaseTimer:0, facingRight:false, animFrame:0, animT:0
+      });
+      _patrolWptMode = false; _patrolWpts = [];
+    }
     // fall through — normal update continues below
   }
 
@@ -901,6 +942,8 @@ function update() {
   }
   // — boss update —
   if (bossActive && !player.dead) updateBoss();
+  // — patrol & ambush creatures —
+  updatePatrolCreatures(); updateAmbushCreatures();
 
   // — win —
   if (rectsOverlap(p.x,p.y,p.w,p.h, GOAL.x,GOAL.y,GOAL.w,GOAL.h)) {
@@ -1207,7 +1250,7 @@ function updateBoss() {
       } else {
         cr.x += cr.vx;
       }
-      if (!player.dead && player.dashTimer === 0 && powerupTimer === 0 &&
+      if (!player.dead && powerupTimer === 0 &&
           playerOvalsHitRect(cr.x, cr.y, CREATURE_W, CREATURE_H)) {
         killPlayer();
       }
@@ -1365,12 +1408,83 @@ function updateBoss() {
   updateBossAnim(b);
 }
 
+function _resetPatrolCreature(pc) {
+  pc.x = pc.waypoints[0].x; pc.y = pc.waypoints[0].y;
+  pc.vx = 0; pc.vy = 0; pc.phase = 'patrol'; pc.wpIdx = 0; pc.chaseTimer = 0;
+}
+function _resetAmbushCreature(ac) {
+  ac.x = ac.ox; ac.y = ac.oy; ac.vx = 0; ac.vy = 0; ac.phase = 'wait'; ac.chaseTimer = 0;
+}
+
+function updatePatrolCreatures() {
+  for (const pc of patrolCreatures) {
+    pc.animT = (pc.animT || 0) + 1;
+    if (pc.animT >= 3) { pc.animT = 0; pc.animFrame = (pc.animFrame + 1) % CROW_IMGS.length; }
+    if (pc.phase === 'patrol') {
+      const dx = player.x + 6 - (pc.x + CREATURE_W / 2);
+      const dy = player.y + 8 - (pc.y + CREATURE_H / 2);
+      if (!player.dead && Math.sqrt(dx * dx + dy * dy) < TRIGGER_DIST) {
+        pc.phase = 'chase'; pc.chaseTimer = CREATURE_CHASE_DUR;
+      } else {
+        const wp = pc.waypoints[pc.wpIdx];
+        const wdx = wp.x - pc.x, wdy = wp.y - pc.y;
+        const dist = Math.sqrt(wdx * wdx + wdy * wdy);
+        if (dist < PATROL_SPEED) {
+          pc.wpIdx = (pc.wpIdx + 1) % pc.waypoints.length;
+        } else {
+          pc.x += (wdx / dist) * PATROL_SPEED;
+          pc.y += (wdy / dist) * PATROL_SPEED;
+          pc.facingRight = wdx > 0;
+        }
+      }
+    } else if (pc.phase === 'chase') {
+      const dx = player.x + 6 - (pc.x + CREATURE_W / 2);
+      const dy = player.y + 8 - (pc.y + CREATURE_H / 2);
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 0.1) { pc.vx = (dx / dist) * CREATURE_CHASE_SPD; pc.vy = (dy / dist) * CREATURE_CHASE_SPD; pc.facingRight = dx > 0; }
+      pc.x += pc.vx; pc.y += pc.vy;
+      if (--pc.chaseTimer <= 0) pc.phase = 'flyoff';
+    } else if (pc.phase === 'flyoff') {
+      pc.x += pc.vx; pc.y += pc.vy;
+      if (pc.x < -60 || pc.x > LW + 60 || pc.y < -2900 || pc.y > LH + 60) _resetPatrolCreature(pc);
+    }
+    if (!player.dead && powerupTimer === 0 && playerOvalsHitRect(pc.x, pc.y, CREATURE_W, CREATURE_H)) killPlayer();
+  }
+}
+
+function updateAmbushCreatures() {
+  for (const ac of ambushCreatures) {
+    ac.animT = (ac.animT || 0) + 1;
+    if (ac.animT >= 3) { ac.animT = 0; ac.animFrame = (ac.animFrame + 1) % CROW_IMGS.length; }
+    if (ac.phase === 'wait') {
+      const dx = player.x + 6 - (ac.x + CREATURE_W / 2);
+      const dy = player.y + 8 - (ac.y + CREATURE_H / 2);
+      if (!player.dead && Math.sqrt(dx * dx + dy * dy) < TRIGGER_DIST) {
+        ac.phase = 'chase'; ac.chaseTimer = CREATURE_CHASE_DUR;
+      }
+    } else if (ac.phase === 'chase') {
+      const dx = player.x + 6 - (ac.x + CREATURE_W / 2);
+      const dy = player.y + 8 - (ac.y + CREATURE_H / 2);
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 0.1) { ac.vx = (dx / dist) * CREATURE_CHASE_SPD; ac.vy = (dy / dist) * CREATURE_CHASE_SPD; ac.facingRight = dx > 0; }
+      ac.x += ac.vx; ac.y += ac.vy;
+      if (--ac.chaseTimer <= 0) ac.phase = 'flyoff';
+    } else if (ac.phase === 'flyoff') {
+      ac.x += ac.vx; ac.y += ac.vy;
+      if (ac.x < -60 || ac.x > LW + 60 || ac.y < -2900 || ac.y > LH + 60) _resetAmbushCreature(ac);
+    }
+    if (!player.dead && powerupTimer === 0 && playerOvalsHitRect(ac.x, ac.y, CREATURE_W, CREATURE_H)) killPlayer();
+  }
+}
+
 function respawn() {
   const old = player;
   player = makePlayer();
   if (_customRespawn !== null) { player.x = _customRespawn.x; player.y = _customRespawn.y; }
   if (bossDefeated) { player.x = 354; player.y = -2298; }
   powerupTimer = 0; _blobPts = null; powerups.forEach(pu => { pu.active = true; });
+  for (const pc of patrolCreatures) _resetPatrolCreature(pc);
+  for (const ac of ambushCreatures) _resetAmbushCreature(ac);
   spawnParticles(old.x+old.w/2, old.y+old.h/2, P.h5, 16, 8, 8, 24);
   screenShake = 6;
   // full boss reset on death — flag reappears, intro replays on next attempt
@@ -2038,6 +2152,39 @@ function drawWorld() {
       _drawCrow(cdx, cdy, flyRight, 1);
     }
     ctx.restore();
+  }
+
+  // — patrol & ambush creatures —
+  {
+    const CWS2 = 20;
+    for (const pc of patrolCreatures) {
+      const fi = pc.animFrame ?? 0;
+      const c2 = CROW_IMGS.length; const t2 = fi % (2*c2-2); const pf = t2 < c2 ? t2 : 2*c2-2-t2;
+      const img = CROW_IMGS[pf];
+      const cdx = pc.x + CREATURE_W/2 - CWS2/2, cdy = pc.y + CREATURE_H/2 - CWS2/2;
+      ctx.globalAlpha = 1; ctx.shadowColor = '#ff6b9d'; ctx.shadowBlur = 6;
+      if (img && img.complete && img.naturalWidth > 0) {
+        if (pc.facingRight) {
+          ctx.save(); ctx.translate(cdx+CWS2, cdy); ctx.scale(-1,1);
+          ctx.drawImage(img,0,0,CWS2,CWS2); ctx.restore();
+        } else { ctx.drawImage(img, cdx, cdy, CWS2, CWS2); }
+      } else { ctx.fillStyle='#ff6b9d'; ctx.fillRect(cdx,cdy,CREATURE_W,CREATURE_H); }
+      ctx.shadowBlur=0;
+    }
+    for (const ac of ambushCreatures) {
+      const fi = ac.animFrame ?? 0;
+      const c2 = CROW_IMGS.length; const t2 = fi % (2*c2-2); const pf = t2 < c2 ? t2 : 2*c2-2-t2;
+      const img = CROW_IMGS[pf];
+      const cdx = ac.x + CREATURE_W/2 - CWS2/2, cdy = ac.y + CREATURE_H/2 - CWS2/2;
+      ctx.globalAlpha = 1; ctx.shadowColor = '#ff6b9d'; ctx.shadowBlur = 6;
+      if (img && img.complete && img.naturalWidth > 0) {
+        if (ac.facingRight) {
+          ctx.save(); ctx.translate(cdx+CWS2, cdy); ctx.scale(-1,1);
+          ctx.drawImage(img,0,0,CWS2,CWS2); ctx.restore();
+        } else { ctx.drawImage(img, cdx, cdy, CWS2, CWS2); }
+      } else { ctx.fillStyle='#ff6b9d'; ctx.fillRect(cdx,cdy,CREATURE_W,CREATURE_H); }
+      ctx.shadowBlur=0;
+    }
   }
 
   // — particles —
@@ -2768,6 +2915,49 @@ function render() {
       ctx.fillRect(_px, _py, _pu.w * 2, _pu.h * 2);
       ctx.strokeRect(_px, _py, _pu.w * 2, _pu.h * 2);
     }
+    // patrol creature hitboxes + waypoint paths
+    ctx.strokeStyle = '#ff9900'; ctx.fillStyle = 'rgba(255,153,0,0.15)'; ctx.lineWidth = 1;
+    for (const _pc of patrolCreatures) {
+      const _pcx = (_pc.x - cam.x) * 2, _pcy = (_pc.y - cam.y) * 2;
+      ctx.fillRect(_pcx, _pcy, CREATURE_W * 2, CREATURE_H * 2);
+      ctx.strokeRect(_pcx, _pcy, CREATURE_W * 2, CREATURE_H * 2);
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      for (let _wi = 0; _wi < _pc.waypoints.length; _wi++) {
+        const _wx = (_pc.waypoints[_wi].x - cam.x) * 2 + CREATURE_W;
+        const _wy2 = (_pc.waypoints[_wi].y - cam.y) * 2 + CREATURE_H;
+        if (_wi === 0) ctx.moveTo(_wx, _wy2); else ctx.lineTo(_wx, _wy2);
+      }
+      if (_pc.waypoints.length > 1) { const _w0 = _pc.waypoints[0]; ctx.lineTo((_w0.x-cam.x)*2+CREATURE_W, (_w0.y-cam.y)*2+CREATURE_H); }
+      ctx.stroke(); ctx.setLineDash([]);
+      for (const _wp of _pc.waypoints) {
+        ctx.beginPath(); ctx.arc((_wp.x-cam.x)*2+CREATURE_W, (_wp.y-cam.y)*2+CREATURE_H, 4, 0, Math.PI*2);
+        ctx.fillStyle='#ff9900'; ctx.fill();
+      }
+      ctx.fillStyle='rgba(255,153,0,0.15)';
+    }
+    // ambush creature hitboxes
+    ctx.strokeStyle = '#ff4444'; ctx.fillStyle = 'rgba(255,68,68,0.15)';
+    for (const _ac of ambushCreatures) {
+      const _acx = (_ac.x - cam.x) * 2, _acy = (_ac.y - cam.y) * 2;
+      ctx.fillRect(_acx, _acy, CREATURE_W * 2, CREATURE_H * 2);
+      ctx.strokeRect(_acx, _acy, CREATURE_W * 2, CREATURE_H * 2);
+    }
+    // pending patrol waypoints (waypoint mode)
+    if (_patrolWptMode && _patrolWpts.length > 0) {
+      ctx.strokeStyle = '#ffffff'; ctx.fillStyle = '#ffffff'; ctx.setLineDash([3,3]);
+      ctx.beginPath();
+      for (let _wi = 0; _wi < _patrolWpts.length; _wi++) {
+        const _wx = (_patrolWpts[_wi].x - cam.x) * 2;
+        const _wy2 = (_patrolWpts[_wi].y - cam.y) * 2;
+        if (_wi === 0) ctx.moveTo(_wx, _wy2); else ctx.lineTo(_wx, _wy2);
+      }
+      ctx.stroke(); ctx.setLineDash([]);
+      for (const _wp of _patrolWpts) {
+        ctx.beginPath(); ctx.arc((_wp.x-cam.x)*2, (_wp.y-cam.y)*2, 5, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
     ctx.restore();
 
     ctx.font = 'bold 18px "Courier New"';
@@ -2775,19 +2965,34 @@ function render() {
     ctx.textAlign = 'right';
     ctx.textBaseline = 'top';
     ctx.fillText('GOD MODE', CW - 16, 16);
-    // editor HUD — key bindings and selection state
+    // editor HUD — redesigned
     ctx.font = '11px "Courier New"';
-    ctx.fillStyle = 'rgba(255,107,157,0.75)';
-    const _edLines = [
-      'EDITOR: click=place spike  click spike=remove  F=respawn  V=powerup',
-      'click plat=select+drag  arrows=nudge  shift+←/→=scale  E=export',
-      editorSelectedPlat >= 0
-        ? `selected: plat[${editorSelectedPlat}]  ${staticPlats[editorSelectedPlat].w}×${staticPlats[editorSelectedPlat].h}`
-        : (_customRespawn !== null ? `respawn: (${Math.round(_customRespawn.x)}, ${Math.round(_customRespawn.y)})` : 'no platform selected'),
+    const _hudSections = [
+      { label: 'PLACE', color: '#ff6b9d', text: 'click=spike  C=ambush  Z=patrol-path  X=spawn-patrol  V=pickup' },
+      { label: 'EDIT',  color: '#ffcc44', text: 'click-plat=select/drag  arrows=nudge  shift+←/→=scale' },
+      { label: 'MISC',  color: '#00ffcc', text: 'F=save-respawn  P=export' },
     ];
-    for (let _i = 0; _i < _edLines.length; _i++) {
-      ctx.fillText(_edLines[_i], CW - 16, 40 + _i * 15);
+    let _hudY = 40;
+    for (const _sec of _hudSections) {
+      ctx.fillStyle = _sec.color;
+      ctx.textAlign = 'right';
+      ctx.fillText(`[${_sec.label}] ${_sec.text}`, CW - 16, _hudY);
+      _hudY += 15;
     }
+    // status line
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.textAlign = 'right';
+    let _statusLine;
+    if (_patrolWptMode) {
+      _statusLine = `PATROL PATH: ${_patrolWpts.length} waypoint(s)  X=confirm(≥2)  Z=cancel`;
+    } else if (editorSelectedPlat >= 0) {
+      _statusLine = `plat[${editorSelectedPlat}]  ${staticPlats[editorSelectedPlat].w}×${staticPlats[editorSelectedPlat].h}`;
+    } else if (_customRespawn !== null) {
+      _statusLine = `respawn: (${Math.round(_customRespawn.x)}, ${Math.round(_customRespawn.y)})  | patrol:${patrolCreatures.length}  ambush:${ambushCreatures.length}`;
+    } else {
+      _statusLine = `patrol:${patrolCreatures.length}  ambush:${ambushCreatures.length}  | click empty=place spike`;
+    }
+    ctx.fillText(_statusLine, CW - 16, _hudY);
     // export confirmation
     if (_editorExportMsg > 0) {
       ctx.font = 'bold 20px "Courier New"';
@@ -2851,6 +3056,8 @@ function startGame() {
   bossTriggered = false; bossDefeated = false; bossActive = false; bossDeathPending = false;
   resetBoss();
   powerupTimer = 0; _blobPts = null; powerups.forEach(pu => { pu.active = true; });
+  for (const pc of patrolCreatures) _resetPatrolCreature(pc);
+  for (const ac of ambushCreatures) _resetAmbushCreature(ac);
   document.getElementById('overlay').classList.add('hidden');
 }
 
@@ -2866,7 +3073,7 @@ document.addEventListener('keydown', e => {
     _godIdx++;
     if (_godIdx === _godSeq.length) {
       godMode = !godMode; _godIdx = 0;
-      if (!godMode) { editorSelectedPlat = -1; _editorDragActive = false; }
+      if (!godMode) { editorSelectedPlat = -1; _editorDragActive = false; _patrolWptMode = false; _patrolWpts = []; }
     }
   } else {
     _godIdx = (e.code === _godSeq[0]) ? 1 : 0;
@@ -2921,6 +3128,25 @@ canvas.addEventListener('mousedown', e => {
       spawnParticles(b.x + b.w / 2, b.y + b.h / 2, '#cd4acd', 14, 7, 7, 22);
       if (b.hp <= 0) { b.hurtTimer = 0; bossDeathPending = true; }
       return;
+    }
+  }
+  // 0b. patrol waypoint mode — add waypoint on click
+  if (_patrolWptMode) {
+    _patrolWpts.push({ x: Math.round(wx), y: Math.round(wy) });
+    return;
+  }
+  // 0c. click on patrol creature → remove it
+  for (let i = patrolCreatures.length - 1; i >= 0; i--) {
+    const pc = patrolCreatures[i];
+    if (wx >= pc.x - 4 && wx <= pc.x + CREATURE_W + 4 && wy >= pc.y - 4 && wy <= pc.y + CREATURE_H + 4) {
+      patrolCreatures.splice(i, 1); return;
+    }
+  }
+  // 0d. click on ambush creature → remove it
+  for (let i = ambushCreatures.length - 1; i >= 0; i--) {
+    const ac = ambushCreatures[i];
+    if (wx >= ac.x - 4 && wx <= ac.x + CREATURE_W + 4 && wy >= ac.y - 4 && wy <= ac.y + CREATURE_H + 4) {
+      ambushCreatures.splice(i, 1); return;
     }
   }
   // 1a. click on any powerup pickup → drag it

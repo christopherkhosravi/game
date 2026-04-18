@@ -1131,6 +1131,56 @@ Run sprite flips on `!facingRight`; wall/dash sprites flip on `facingRight` (the
 
 **In `playerOvalsHitRect()`**: same flip logic applied per-check before computing oval center.
 
+## Patrol & Ambush Creature System
+
+**What it does:** Two new enemy types — patrol creatures follow a looping waypoint path; ambush creatures sit still until the player enters trigger range. Both use the crow sprite and kill the player on contact. Both reset on death/restart.
+
+**Key constants:**
+- `TRIGGER_DIST = 200` — world units; distance at which idle creatures begin chasing
+- `PATROL_SPEED = 0.8` — world units/frame moving between waypoints
+- `CREATURE_CHASE_SPD = 2.5` — world units/frame while chasing
+- `CREATURE_CHASE_DUR = 120` — frames (2 s) before chase locks and creature flies offscreen
+
+**Arrays (GAME STATE section):**
+- `patrolCreatures` — `[{waypoints:[{x,y},...], x,y,vx,vy,phase,wpIdx,chaseTimer,facingRight,animFrame,animT}]`
+- `ambushCreatures` — `[{ox,oy,x,y,vx,vy,phase,chaseTimer,facingRight,animFrame,animT}]`
+
+**State machine (both types):**
+- Patrol: `patrol → chase → flyoff → (reset to patrol)`
+- Ambush: `wait → chase → flyoff → (reset to wait at ox/oy)`
+- On flyoff: creature continues at locked `vx/vy` until it exits level bounds, then resets
+
+**Damage rule:** Contact kills unconditionally — no dash immunity (removed from boss attack creatures too), no powerup immunity. Only god mode blocks kill.
+
+**Update functions:** `updatePatrolCreatures()` and `updateAmbushCreatures()` — called from `update()` after `updateBoss()`, not gated on `!player.dead` (creatures freeze when player is dead since `update()` returns early in the dead block).
+
+**Rendering:** In `drawWorld()` after the boss block, using `CWS2=20` world-unit crow sprite with ping-pong animation from `CROW_IMGS`. Drawn with `#ff6b9d` shadow glow.
+
+**Reset integration:** `respawn()` and `startGame()` both call `_resetPatrolCreature(pc)` / `_resetAmbushCreature(ac)` for all array elements.
+
+## God Mode — Updated Key Bindings (Post-Creature Session)
+
+**Export key moved: E → P.** `KeyE` was both dash-right (gameplay) and export (god mode). `KeyP` has no gameplay use.
+
+**New god mode keys:**
+- `C` — place ambush creature centred on player body position
+- `Z` — toggle patrol waypoint placement mode on/off (cancels + clears pending waypoints)
+- `X` — confirm patrol spawn from pending waypoints (requires ≥2); exits waypoint mode
+- In waypoint mode, **mouse clicks** add waypoints instead of placing spikes
+
+**Click-to-remove:** Clicking within 4px of a patrol or ambush creature in god mode removes it from the array.
+
+**Waypoint path visualisation (god mode overlay):**
+- Placed patrol creatures: orange (`#ff9900`) hitbox rect + dashed loop path connecting all waypoints
+- Ambush creatures: red (`#ff4444`) hitbox rect
+- Pending waypoints (Z mode active): white dashed line + dots at each waypoint position
+
+**God mode HUD redesign:** Three labelled sections right-aligned at top-right:
+- `[PLACE]` (pink) — click=spike, C=ambush, Z=patrol-path, X=spawn-patrol, V=pickup
+- `[EDIT]` (yellow) — click-plat=select/drag, arrows=nudge, shift+←/→=scale
+- `[MISC]` (cyan) — F=save-respawn, P=export
+- Status line (white, dim) — changes based on context: patrol path waypoint count, selected platform dims, respawn coords, or creature counts
+
 ### playerOvalsHitRect(rx0, ry0, rw, rh)
 
 Placed immediately before `checkHazards()`. Converts canvas-pixel oval params to world units (`/ 2`), then for each of the 3 ovals runs the ellipse-vs-closest-point test:
