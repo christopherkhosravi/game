@@ -1409,19 +1409,15 @@ const SPRITE_DEFS = {
 // _sprTop = (player.y+8-cam.y)*2 (sprite top canvas px). _sprCx = (player.x+6-cam.x)*2 (sprite center x).
 // Wall state drawn at scale=0.85 → sprite top is at _sprTop+24; cy values already include this offset.
 const PLAYER_OVALS = {
-  // All values canvas px, measured from per-frame pixel bounding boxes via Pillow.
-  // Format: [headCy,headRy,headRx,headDx, torsoCy,torsoRy,torsoRx,torsoDx, legsCy,legsRy,legsRx,legsDx]
-  // Anchored to _sprTop=(player.y+8-cam.y)*2, _sprCx=(player.x+6-cam.x)*2.
-  // dx mirrored in both god-mode display and playerOvalsHitRect when sprite is flipped.
-  idle:   [ 27,18,20, 0,   81,35,22, 0,   134,18,19, 0],
+  idle:   [ 32,15,10, 0,   77,25,12, 0,   125,28, 9, 0],
   run:    [ 77,20,19,-12,  112,24,30, 0,   143,14,43, 0],
-  jump:   [ 21,12,23, 0,   52,22,30, 0,    86,20,28, 0],
-  fall:   [ 30,19,24, 0,   82,35,22, 0,   134,18,20,-6],
-  float:  [ 29,18,36, 0,   82,35,36, 0,   136,18,18, 8],
-  bounce: [ 14,12,40, 0,   43,19,48, 0,    71,10,29, 0],
+  jump:   [ 48,14,10, 0,   77,24,13, 0,   null,0, 0, 0],
+  fall:   [ 32,14,10, 0,   72,22,13, 0,   122,20,10, 0],
+  float:  [ 40,36,42, 0,  104,18,13, 0,   133,16, 9, 0],
+  bounce: [ 29,14,10, 0,   67,22,15, 0,   null,0, 0, 0],
   wall:   [ 55,14,17,-6,   97,28,19,-6,   138,14,11,-6],
-  dash:   [ 32,30,38,-10,  86,33,22,-4,   139,21,48,-5],
-  dying:  [ 64,18,30,-5,  102,26,31,-4,   139,14,29, 1],
+  dash:   [ 32,15,11, 0,   83,26,14, 0,   131,25,10, 0],
+  dying:  [ 36,16,14, 0,   76,26,16, 0,   120,20,12, 0],
 };
 
 // Pre-load all PNG frames; keyed by folder name to avoid duplicate loads
