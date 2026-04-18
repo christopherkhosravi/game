@@ -461,6 +461,8 @@ let _editorDragPlatX0 = 0;    // platform x/y at drag start (world units)
 let _editorDragPlatY0 = 0;
 let _editorExportMsg = 0;     // frames remaining to show "Exported to console"
 let _editorDragPowerupIdx = -1; // index into powerups[] being dragged, -1 = none
+let _godMouseCX = 0, _godMouseCY = 0; // mouse canvas-pixel position (updated in mousemove)
+let _playerFrozen = false;             // T toggle — locks player x/y in place
 
 // — patrol & ambush creatures —
 let patrolCreatures = [];   // {waypoints,x,y,vx,vy,phase,wpIdx,chaseTimer,animT,animFrame,facingRight}
@@ -594,18 +596,24 @@ function update() {
     }
     // Arrow flight overrides physics velocity for that frame; WASD/Space abilities work freely otherwise
     if (_arrowFly) { p.vx = 0; p.vy = 0; }
-    // F saves current player position as custom respawn point
+    // T toggles freeze — locks player x/y each frame
+    if (justPressed['KeyT']) _playerFrozen = !_playerFrozen;
+    if (_playerFrozen) { p.vx = 0; p.vy = 0; }
+    // derive mouse world position for key-based placement
+    const _mwx = Math.round(_godMouseCX / 2 + cam.x);
+    const _mwy = Math.round(_godMouseCY / 2 + cam.y);
+    // F saves mouse position as custom respawn point
     if (justPressed['KeyF']) {
-      _customRespawn = { x: player.x, y: player.y };
+      _customRespawn = { x: _mwx, y: _mwy };
     }
-    // V places a new powerup pickup at player position (unlimited); V near existing = remove it
+    // V places a new powerup pickup at mouse position; V near existing = remove it
     if (justPressed['KeyV']) {
       const pw = 12, ph = 12;
-      const px = Math.round(player.x + player.w / 2 - pw / 2);
-      const py = Math.round(player.y + PLAYER_PHYS_H / 2 - ph / 2);
+      const px = Math.round(_mwx - pw / 2);
+      const py = Math.round(_mwy - ph / 2);
       const nearIdx = powerups.findIndex(pu => Math.abs(pu.x - px) < 20 && Math.abs(pu.y - py) < 20);
       if (nearIdx >= 0) {
-        powerups.splice(nearIdx, 1); // remove nearby pickup
+        powerups.splice(nearIdx, 1);
       } else {
         powerups.push({ x: px, y: py, w: pw, h: ph, active: true });
       }
@@ -629,15 +637,11 @@ function update() {
       _editorExportMsg = 120;
     }
     if (_editorExportMsg > 0) _editorExportMsg--;
-    // C places an ambush creature at player centre
+    // C places an ambush creature at mouse position
     if (justPressed['KeyC']) {
-      ambushCreatures.push({
-        ox: Math.round(player.x + player.w/2 - CREATURE_W/2),
-        oy: Math.round(player.y + PLAYER_PHYS_H/2 - CREATURE_H/2),
-        x: Math.round(player.x + player.w/2 - CREATURE_W/2),
-        y: Math.round(player.y + PLAYER_PHYS_H/2 - CREATURE_H/2),
-        vx:0, vy:0, phase:'wait', chaseTimer:0, facingRight:false, animFrame:0, animT:0
-      });
+      const _acx = Math.round(_mwx - CREATURE_W/2);
+      const _acy = Math.round(_mwy - CREATURE_H/2);
+      ambushCreatures.push({ ox:_acx, oy:_acy, x:_acx, y:_acy, vx:0, vy:0, phase:'wait', chaseTimer:0, facingRight:false, animFrame:0, animT:0 });
     }
     // Z toggles patrol waypoint placement mode; X confirms spawn (>=2 waypoints required)
     if (justPressed['KeyZ']) {
@@ -2964,22 +2968,23 @@ function render() {
     ctx.fillStyle = '#ff6b9d';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'top';
-    ctx.fillText('GOD MODE', CW - 16, 16);
-    // editor HUD — redesigned
-    ctx.font = '11px "Courier New"';
+    ctx.fillText(_playerFrozen ? 'GOD MODE  [FROZEN]' : 'GOD MODE', CW - 16, 16);
+    // editor HUD — redesigned (33px = 3× the old 11px)
+    ctx.font = '33px "Courier New"';
     const _hudSections = [
-      { label: 'PLACE', color: '#ff6b9d', text: 'click=spike  C=ambush  Z=patrol-path  X=spawn-patrol  V=pickup' },
+      { label: 'PLACE', color: '#ff6b9d', text: 'click=spike  C=ambush  Z=patrol-path  X=spawn  V=pickup' },
       { label: 'EDIT',  color: '#ffcc44', text: 'click-plat=select/drag  arrows=nudge  shift+←/→=scale' },
-      { label: 'MISC',  color: '#00ffcc', text: 'F=save-respawn  P=export' },
+      { label: 'MISC',  color: '#00ffcc', text: 'F=save-respawn  P=export  T=freeze-player' },
     ];
-    let _hudY = 40;
+    let _hudY = 50;
     for (const _sec of _hudSections) {
       ctx.fillStyle = _sec.color;
       ctx.textAlign = 'right';
       ctx.fillText(`[${_sec.label}] ${_sec.text}`, CW - 16, _hudY);
-      _hudY += 15;
+      _hudY += 40;
     }
     // status line
+    ctx.font = '28px "Courier New"';
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
     ctx.textAlign = 'right';
     let _statusLine;
@@ -2988,9 +2993,9 @@ function render() {
     } else if (editorSelectedPlat >= 0) {
       _statusLine = `plat[${editorSelectedPlat}]  ${staticPlats[editorSelectedPlat].w}×${staticPlats[editorSelectedPlat].h}`;
     } else if (_customRespawn !== null) {
-      _statusLine = `respawn: (${Math.round(_customRespawn.x)}, ${Math.round(_customRespawn.y)})  | patrol:${patrolCreatures.length}  ambush:${ambushCreatures.length}`;
+      _statusLine = `respawn: (${Math.round(_customRespawn.x)}, ${Math.round(_customRespawn.y)})  patrol:${patrolCreatures.length}  ambush:${ambushCreatures.length}`;
     } else {
-      _statusLine = `patrol:${patrolCreatures.length}  ambush:${ambushCreatures.length}  | click empty=place spike`;
+      _statusLine = `patrol:${patrolCreatures.length}  ambush:${ambushCreatures.length}`;
     }
     ctx.fillText(_statusLine, CW - 16, _hudY);
     // export confirmation
@@ -3011,17 +3016,20 @@ function render() {
       ctx.beginPath(); ctx.arc(mx, my, 6, 0, Math.PI * 2); ctx.stroke();
       ctx.lineWidth = 1;
     }
+    // red dot tracks mouse; show world coords next to it
     ctx.textAlign = 'left';
-    const dotX = (player.x + 6 - cam.x) * 2;
-    const dotY = (player.y + 8 - cam.y) * 2;
+    const _dotX = _godMouseCX;
+    const _dotY = _godMouseCY;
+    const _dotWX = Math.round(_dotX / 2 + cam.x);
+    const _dotWY = Math.round(_dotY / 2 + cam.y);
     ctx.beginPath();
-    ctx.arc(dotX, dotY, 5, 0, Math.PI * 2);
+    ctx.arc(_dotX, _dotY, 5, 0, Math.PI * 2);
     ctx.fillStyle = '#ff0000';
     ctx.fill();
     ctx.font = '56px "Courier New"';
     ctx.fillStyle = '#ff0000';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`(${Math.round(player.x)}, ${Math.round(player.y)})`, dotX + 9, dotY);
+    ctx.fillText(`(${_dotWX}, ${_dotWY})`, _dotX + 9, _dotY);
     ctx.textBaseline = 'top';
   }
   if (lbTitleShow) drawTitleLeaderboard();
@@ -3073,7 +3081,7 @@ document.addEventListener('keydown', e => {
     _godIdx++;
     if (_godIdx === _godSeq.length) {
       godMode = !godMode; _godIdx = 0;
-      if (!godMode) { editorSelectedPlat = -1; _editorDragActive = false; _patrolWptMode = false; _patrolWpts = []; }
+      if (!godMode) { editorSelectedPlat = -1; _editorDragActive = false; _patrolWptMode = false; _patrolWpts = []; _playerFrozen = false; }
     }
   } else {
     _godIdx = (e.code === _godSeq[0]) ? 1 : 0;
@@ -3192,6 +3200,9 @@ canvas.addEventListener('mousemove', e => {
   const rect = canvas.getBoundingClientRect();
   const scaleX = CW / rect.width;
   const scaleY = CH / rect.height;
+  // always track mouse canvas position for red dot + key-based placement
+  _godMouseCX = (e.clientX - rect.left) * scaleX;
+  _godMouseCY = (e.clientY - rect.top) * scaleY;
   if (_editorDragPowerupIdx >= 0 && powerups[_editorDragPowerupIdx]) {
     powerups[_editorDragPowerupIdx].x = Math.round(_editorDragPlatX0 + (e.clientX - _editorDragStartCX) * scaleX / 2);
     powerups[_editorDragPowerupIdx].y = Math.round(_editorDragPlatY0 + (e.clientY - _editorDragStartCY) * scaleY / 2);
