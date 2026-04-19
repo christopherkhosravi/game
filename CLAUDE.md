@@ -895,9 +895,9 @@ Code identifiers (`drawHnov`, `HNOV SPRITE SYSTEM` comment, `// Hnov sprite` com
 
 ## Boss & Crow Animation System
 
-**Asset locations:** `animations/boss/{idle,attack,dash,death,hurt,summon}/` (256×256 RGBA PNGs) and `animations/crow/` (128×128 RGBA PNGs).
+**Asset locations:** `animations/boss/{idle,attack,dash,death,hurt,summon}/` (256×256 RGBA PNGs) and `animations/crow/{idle,dive}/` (640×640 RGBA PNGs).
 
-**Processing:** All frames extracted from `animations/boss mp4s/` using ffmpeg. Background removal: max(R,G,B) threshold (< 25 → transparent, 25–70 → ramp, ≥ 70 → opaque) for all boss videos (black and dark-blue backgrounds); inverted max-channel threshold (160 − max channel) for crow (bright gray background). 1920×1080 source videos cropped to 1080×1080 (columns 420–1499) before resize.
+**Processing:** All frames extracted from `animations/boss mp4s/` using ffmpeg. Background removal: max(R,G,B) threshold (< 25 → transparent, 25–70 → ramp, ≥ 70 → opaque) for all boss videos (black and dark-blue backgrounds); inverted threshold `alpha = clamp((155 − max_ch) × (255/55), 0, 255)` for crow (bright gray background ~183–231 max). 1920×1080 source videos cropped to 1080×1080 (columns 420–1499) before resize.
 
 **Frame counts and source fps:**
 | Animation | Frames | Source fps | Source file |
@@ -908,9 +908,16 @@ Code identifiers (`drawHnov`, `HNOV SPRITE SYSTEM` comment, `// Hnov sprite` com
 | death | 141 | 24fps | death.mp4 |
 | hurt | 46 | 30fps | hurt short.mp4 |
 | summon | 91 | 30fps | summon short.mp4 |
-| crow | 97 | 24fps | crow.mp4 |
+| crow/idle | 193 | 24fps | crow idle.mp4 |
+| crow/dive | 97 | 24fps | crow dive.mp4 |
 
-**Loaders (`BOSS_IMGS`, `CROW_IMGS`):** Placed after KULLAD_IMGS. `BOSS_IMGS` is an object keyed by animation name; each value is an array of Image objects. `CROW_IMGS` is a flat array of 97 Images. Both are included in the LOADING TRACKER image list.
+**Loaders (`BOSS_IMGS`, `CROW_IMGS`):** Placed after KULLAD_IMGS. `BOSS_IMGS` is an object keyed by animation name; each value is an array of Image objects. `CROW_IMGS` is an object with `idle` (193 frames) and `dive` (97 frames) arrays. Both included in the LOADING TRACKER.
+
+**Crow state selection:**
+- Boss ambient creatures (orbiting) → `idle`
+- Boss attack wave creatures (rain/wall/circle) → `dive`
+- Patrol creatures in `patrol` phase → `idle`; `chase`/`flyoff` → `dive`
+- Ambush creatures in `wait` phase → `idle`; `chase`/`flyoff` → `dive`
 
 **`updateBossAnim(b)`:** Called at the end of every `updateBoss()` tick. Priority: `bossDeathPending` → death; `hurtTimer > 0` → hurt; `hover` with active creatures → summon; else phase map. Switches clip immediately on state change (resets frame/tick to 0). Advances frame every 2 game ticks (~30fps playback). Idle uses ping-pong indexing `(N−1)×2` virtual cycle. Death plays once and on the last frame fires `beginBossCutscene(2)` and sets `bossDeathPending = false; bossActive = false`. Hurt plays once and holds last frame until `hurtTimer` expires.
 
@@ -1042,22 +1049,15 @@ The `dashGrace` path is now gated on `p.jumpCount === 0`. This preserves the int
 
 ## Powerup System — Reworked
 
-### Orb Visual — Soft Body Blob
+### Orb Visual — Sprite Animation
 
-`drawPowerupOrb` replaced with an 8-point soft-body simulation. Constants (all in world units, inside the 2× scaled ctx):
-- `BLOB_N = 8` anchor points evenly spaced around a ring
-- `BLOB_R = 13` rest ring radius
-- `BLOB_DRAG = 0.55` how far player velocity displaces rest positions (higher = more trail)
-- `BLOB_SPRING = 0.22` spring stiffness
-- `BLOB_DAMP = 0.68` velocity damping per frame (lower = more overshoot/oscillation)
+`drawPowerupOrb` uses `ORB_IMGS` sprite frames instead of the old soft-body blob simulation.
 
-Each frame:
-1. Smooth player velocity (`_powerupVx/vy`) with 0.25 lerp
-2. Per-point: compute rest position = ring angle + velocity drag offset; apply spring + damping to current position
-3. Build closed smooth path using quadratic bezier midpoints through the 8 points
-4. Draw 4 layers: outer halo (shadow blur 20), main fill (radial gradient white→cyan→blue + shadow), edge stroke, specular highlight
+**Assets:** `animations/orb/idle/` (97 frames) and `animations/orb/moving/` (97 frames). Source: `Orb idle.mp4` and `orb moving.mp4` — 640×640, 24fps, dark purple background (~48 max channel). Background removal: `alpha = clamp((max_ch − 65) × (255/30), 0, 255)` (max < 65 → transparent, 65–95 → ramp, > 95 → opaque).
 
-Blob state (`_blobPts`) is reset on pickup collection, powerup expiry, respawn, and `startGame()`. The last 60 frames fade out (alpha = `powerupTimer / 60`).
+**Draw:** `ORB_DRAW_SIZE = 40` world units, centred on player body at `(wx + pw/2, wy + PLAYER_PHYS_H/2)`. Content crop `ORB_CROP = {sx:134, sy:134, sw:372, sh:372}` (measured via Pillow `getbbox`). State: `'moving'` when `|vx| + |vy| >= 0.5`, otherwise `'idle'`. Ping-pong across the 97-frame array. Last 60 frames fade out (`alpha = powerupTimer/60`). Pink shadow blur 14.
+
+**`ORB_IMGS` loader:** Placed after `CROW_IMGS` loader. Object with `idle` and `moving` arrays, both 97 Images. Included in the LOADING TRACKER.
 
 ### Powerup Behaviour — Flight Mode
 

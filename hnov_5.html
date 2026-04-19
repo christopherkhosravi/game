@@ -409,9 +409,6 @@ let _customRespawn = null; // {x, y} world coords set via F in god mode; null = 
 let powerups = [];          // [{x,y,w:12,h:12,active:true}, ...] — persistent level pickups
 let powerupTimer = 0;       // frames remaining (240 = 4 s at 60 fps)
 const POWERUP_DURATION = 240;
-let _powerupVx = 0;         // smoothed player vx for orb drag
-let _powerupVy = 0;         // smoothed player vy for orb drag
-let _blobPts = null;        // soft-body anchor points [{cx,cy,vx,vy}] in world units
 
 // level editor (god mode only)
 let editorSelectedPlat = -1;  // index into staticPlats; -1 = none selected
@@ -640,7 +637,7 @@ function update() {
   // — powerup timer —
   if (powerupTimer > 0) {
     powerupTimer--;
-    if (powerupTimer === 0) { powerups.forEach(pu => { pu.active = true; }); _blobPts = null; }
+    if (powerupTimer === 0) { powerups.forEach(pu => { pu.active = true; }); }
   }
 
   const p = player;
@@ -885,7 +882,6 @@ function update() {
       if (_pu.active && rectsOverlap(p.x, p.y, p.w, p.h, _pu.x, _pu.y, _pu.w, _pu.h)) {
         _pu.active = false;
         powerupTimer = POWERUP_DURATION;
-        _powerupVx = 0; _powerupVy = 0; _blobPts = null;
         spawnParticles(p.x + p.w / 2, p.y + PLAYER_PHYS_H / 2, '#00ffcc', 18, 6, 6, 22);
         break;
       }
@@ -1384,7 +1380,7 @@ function _resetAmbushCreature(ac) {
 function updatePatrolCreatures() {
   for (const pc of patrolCreatures) {
     pc.animT = (pc.animT || 0) + 1;
-    if (pc.animT >= 3) { pc.animT = 0; pc.animFrame = (pc.animFrame + 1) % CROW_IMGS.length; }
+    if (pc.animT >= 3) { pc.animT = 0; pc.animFrame = (pc.animFrame + 1) % 10000; }
     if (pc.phase === 'patrol') {
       const dx = player.x + 6 - (pc.x + CREATURE_W / 2);
       const dy = player.y + 8 - (pc.y + CREATURE_H / 2);
@@ -1420,7 +1416,7 @@ function updatePatrolCreatures() {
 function updateAmbushCreatures() {
   for (const ac of ambushCreatures) {
     ac.animT = (ac.animT || 0) + 1;
-    if (ac.animT >= 3) { ac.animT = 0; ac.animFrame = (ac.animFrame + 1) % CROW_IMGS.length; }
+    if (ac.animT >= 3) { ac.animT = 0; ac.animFrame = (ac.animFrame + 1) % 10000; }
     if (ac.phase === 'wait') {
       const dx = player.x + 6 - (ac.x + CREATURE_W / 2);
       const dy = player.y + 8 - (ac.y + CREATURE_H / 2);
@@ -1447,7 +1443,7 @@ function respawn() {
   player = makePlayer();
   if (_customRespawn !== null) { player.x = _customRespawn.x; player.y = _customRespawn.y; }
   if (bossDefeated) { player.x = 354; player.y = -2298; }
-  powerupTimer = 0; _blobPts = null; powerups.forEach(pu => { pu.active = true; });
+  powerupTimer = 0; powerups.forEach(pu => { pu.active = true; });
   for (const pc of patrolCreatures) _resetPatrolCreature(pc);
   for (const ac of ambushCreatures) _resetAmbushCreature(ac);
   spawnParticles(old.x+old.w/2, old.y+old.h/2, P.h5, 16, 8, 8, 24);
@@ -1602,14 +1598,17 @@ const BOSS_IMGS = {};
   }
 })();
 
-// Crow creature animation — 97 RGBA PNGs, ping-pong looped
-const CROW_IMGS = [];
+// Crow creature animation — idle (193 frames) and dive (97 frames), ping-pong looped
+const CROW_IMGS = { idle: [], dive: [] };
 (function() {
-  for (let i = 1; i <= 97; i++) {
-    const img = new Image();
-    img.src = `animations/crow/${i}.png`;
-    CROW_IMGS.push(img);
-  }
+  for (let i = 1; i <= 193; i++) { const img = new Image(); img.src = `animations/crow/idle/${i}.png`; CROW_IMGS.idle.push(img); }
+  for (let i = 1; i <= 97; i++)  { const img = new Image(); img.src = `animations/crow/dive/${i}.png`; CROW_IMGS.dive.push(img); }
+})();
+// Orb powerup animation — idle (97 frames) and moving (97 frames), ping-pong looped
+const ORB_IMGS = { idle: [], moving: [] };
+(function() {
+  for (let i = 1; i <= 97; i++) { const img = new Image(); img.src = `animations/orb/idle/${i}.png`;   ORB_IMGS.idle.push(img); }
+  for (let i = 1; i <= 97; i++) { const img = new Image(); img.src = `animations/orb/moving/${i}.png`; ORB_IMGS.moving.push(img); }
 })();
 
 // Building rooftop image — parapet strip drawn over the floor platform (staticPlats[0])
@@ -1644,120 +1643,40 @@ function updateBgVideo() {
 const SPRITE_W = 60;
 const SPRITE_H = 80;
 
-// ─── SOFT-BODY BLOB ─────────────────────────────────────────────────────────
-// 10 anchor points in a ring. Each springs toward a rest position offset opposite
-// player velocity — large drag creates a dramatic water-drop / teardrop deformation.
-const BLOB_N       = 10;
-const BLOB_R       = 16;   // rest ring radius (world units, inside 2× scaled ctx)
-const BLOB_DRAG    = 5.0;  // large: trailing anchors pushed ~14 units back at flight speed
-const BLOB_SPRING  = 0.04; // very soft — slow, fluid return to sphere when stopping
-const BLOB_DAMP    = 0.90; // light damping — gentle oscillation / wobble on stop
-
-function _initBlobPts(cx, cy) {
-  _blobPts = [];
-  for (let i = 0; i < BLOB_N; i++) {
-    const a = (i / BLOB_N) * Math.PI * 2;
-    _blobPts.push({ cx: cx + Math.cos(a) * BLOB_R, cy: cy + Math.sin(a) * BLOB_R, vx: 0, vy: 0 });
-  }
-}
-
-// Draws the powerup orb — a water/slime drop that deforms with movement.
-// One smooth bezier shape: round ball at rest, teardrop when moving.
+// ─── ORB SPRITE DRAW ────────────────────────────────────────────────────────
+// Draws the powerup orb using ORB_IMGS sprite frames.
+// State: 'moving' when speed >= 0.5 world units/frame, 'idle' otherwise.
 // Called inside the 2× scaled ctx, so all coords are world units.
-function drawPowerupOrb(wx, wy, pw, ph, vx, vy) {
-  // Moderate smoothing — fluid but responsive
-  _powerupVx += (vx - _powerupVx) * 0.35;
-  _powerupVy += (vy - _powerupVy) * 0.35;
+const ORB_DRAW_SIZE = 40; // world units; content fills ~372/640 of each frame
+const ORB_CROP = { sx: 134, sy: 134, sw: 372, sh: 372 }; // visible content bounds
 
+function drawPowerupOrb(wx, wy, pw, ph, vx, vy) {
+  const speed = Math.abs(vx) + Math.abs(vy);
+  const state = speed >= 0.5 ? 'moving' : 'idle';
+  const arr = ORB_IMGS[state];
+  const n = arr.length;
+  const cycle = (n - 1) * 2;
+  const t = Math.floor(frame * 0.4) % cycle;
+  const idx = t < n ? t : cycle - t;
+  const img = arr[idx];
+  const fadeAlpha = powerupTimer < 60 ? powerupTimer / 60 : 1;
   const cx = wx + pw / 2;
   const cy = wy + PLAYER_PHYS_H / 2;
-
-  if (!_blobPts) _initBlobPts(cx, cy);
-
-  // Spring each anchor toward rest position offset back by velocity.
-  // Large BLOB_DRAG means trailing anchors are pulled far behind centre,
-  // creating a dramatic teardrop/water-drop silhouette at flight speed.
-  for (let i = 0; i < BLOB_N; i++) {
-    const a = (i / BLOB_N) * Math.PI * 2;
-    const restX = cx + Math.cos(a) * BLOB_R - _powerupVx * BLOB_DRAG;
-    const restY = cy + Math.sin(a) * BLOB_R - _powerupVy * BLOB_DRAG;
-    const pt = _blobPts[i];
-    const ax = (restX - pt.cx) * BLOB_SPRING;
-    const ay = (restY - pt.cy) * BLOB_SPRING;
-    pt.vx = (pt.vx + ax) * BLOB_DAMP;
-    pt.vy = (pt.vy + ay) * BLOB_DAMP;
-    pt.cx += pt.vx;
-    pt.cy += pt.vy;
-  }
-
-  const fadeAlpha = powerupTimer < 60 ? powerupTimer / 60 : 1;
-
-  // One smooth closed shape through all anchor points
-  const blobPath = () => {
-    ctx.beginPath();
-    const last = _blobPts[BLOB_N - 1];
-    const first = _blobPts[0];
-    ctx.moveTo((last.cx + first.cx) / 2, (last.cy + first.cy) / 2);
-    for (let i = 0; i < BLOB_N; i++) {
-      const p0 = _blobPts[i];
-      const p1 = _blobPts[(i + 1) % BLOB_N];
-      ctx.quadraticCurveTo(p0.cx, p0.cy, (p0.cx + p1.cx) / 2, (p0.cy + p1.cy) / 2);
-    }
-    ctx.closePath();
-  };
-
-  // Centroid of actual anchor positions (follows the deformed shape)
-  let bcx = 0, bcy = 0;
-  for (const pt of _blobPts) { bcx += pt.cx; bcy += pt.cy; }
-  bcx /= BLOB_N; bcy /= BLOB_N;
-
+  const dx = cx - ORB_DRAW_SIZE / 2;
+  const dy = cy - ORB_DRAW_SIZE / 2;
   ctx.save();
   ctx.globalAlpha = fadeAlpha;
-
-  // Layer 1 — outer glow halo
-  blobPath();
-  ctx.shadowColor = '#00ffee';
-  ctx.shadowBlur = 22;
-  ctx.fillStyle = 'rgba(0,190,255,0.13)';
-  ctx.fill();
-
-  // Layer 2 — main water-drop fill.
-  // Gradient origin shifts toward the leading edge (opposite of velocity drag)
-  // so the front of the drop looks bright/lit and the tail looks deep blue.
-  const gInX = bcx - _powerupVx * 1.8;
-  const gInY = bcy - _powerupVy * 1.8;
-  const grad = ctx.createRadialGradient(gInX, gInY, 0, bcx, bcy, BLOB_R * 1.4);
-  grad.addColorStop(0,    '#ffffff');
-  grad.addColorStop(0.12, '#ddfffe');
-  grad.addColorStop(0.38, '#00ccff');
-  grad.addColorStop(0.72, '#0055cc');
-  grad.addColorStop(1,    '#001880');
-  blobPath();
-  ctx.fillStyle = grad;
-  ctx.shadowColor = '#00ffcc';
-  ctx.shadowBlur = 10;
-  ctx.fill();
-
-  // Layer 3 — glowing rim
-  blobPath();
-  ctx.strokeStyle = 'rgba(150,255,255,0.82)';
-  ctx.lineWidth = 0.7;
-  ctx.shadowColor = 'rgba(0,255,230,0.9)';
-  ctx.shadowBlur = 5;
-  ctx.stroke();
-
+  ctx.shadowColor = '#cc44ff';
+  ctx.shadowBlur = 14;
+  if (img && img.complete && img.naturalWidth > 0) {
+    const c = ORB_CROP;
+    ctx.drawImage(img, c.sx, c.sy, c.sw, c.sh, dx, dy, ORB_DRAW_SIZE, ORB_DRAW_SIZE);
+  } else {
+    ctx.fillStyle = '#cc44ff';
+    ctx.beginPath(); ctx.arc(cx, cy, ORB_DRAW_SIZE / 2, 0, Math.PI * 2); ctx.fill();
+  }
   ctx.shadowBlur = 0;
-
-  // Layer 4 — specular highlight, positioned on the leading face
-  const specX = cx - _powerupVx * 0.9;
-  const specY = cy - _powerupVy * 0.9;
-  ctx.fillStyle = 'rgba(255,255,255,0.88)';
-  ctx.beginPath();
-  ctx.ellipse(specX - BLOB_R * 0.18, specY - BLOB_R * 0.20,
-              BLOB_R * 0.22, BLOB_R * 0.12,
-              Math.atan2(_powerupVy, _powerupVx) + Math.PI / 2, 0, Math.PI * 2);
-  ctx.fill();
-
+  ctx.globalAlpha = 1;
   ctx.restore();
 }
 
@@ -2074,16 +1993,18 @@ function drawWorld() {
       ctx.fillRect(b.x, b.y, b.w, b.h);
     }
 
-    // Crow sprite shared animation (ping-pong, ~24fps)
-    const _cN = CROW_IMGS.length;
-    const _cCycle = (_cN - 1) * 2;
-    const _cT = Math.floor(frame * 0.4) % _cCycle;
-    const _cIdx = _cT < _cN ? _cT : _cCycle - _cT;
-    const crowFrame = CROW_IMGS[_cIdx];
+    // Crow sprite: ping-pong per state ('idle' or 'dive'), ~24fps
     const CWS = 20; // crow draw size in world units
+    function _getCrowFrame(state) {
+      const arr = CROW_IMGS[state] || CROW_IMGS.idle;
+      const n = arr.length; const cycle = (n - 1) * 2;
+      const t = Math.floor(frame * 0.4) % cycle;
+      return arr[t < n ? t : cycle - t];
+    }
 
     // Helper: draw one crow sprite at world position (cdx, cdy), flipped if flyRight
-    function _drawCrow(cdx, cdy, flyRight, alpha) {
+    function _drawCrow(cdx, cdy, flyRight, alpha, state) {
+      const crowFrame = _getCrowFrame(state || 'idle');
       ctx.globalAlpha = alpha;
       ctx.shadowColor = '#ff6b9d'; ctx.shadowBlur = 6;
       if (crowFrame && crowFrame.complete && crowFrame.naturalWidth > 0) {
@@ -2106,7 +2027,7 @@ function drawWorld() {
       const acy = ac.y + CREATURE_H / 2 - CWS / 2;
       // face direction: during orbit vx=0 so use sin(angle); during fly-off use vx
       const acRight = ac.vx !== 0 ? ac.vx > 0 : Math.sin(ac.angle) < 0;
-      _drawCrow(acx, acy, acRight, 0.45);
+      _drawCrow(acx, acy, acRight, 0.45, 'idle');
     }
 
     // Attack-wave creatures — full alpha, kill on contact
@@ -2114,7 +2035,7 @@ function drawWorld() {
       const cdx = cr.x + CREATURE_W / 2 - CWS / 2;
       const cdy = cr.y + CREATURE_H / 2 - CWS / 2;
       const flyRight = cr.type === 'circle' ? cr.cvx > 0 : cr.type === 'rain' ? false : cr.vx > 0;
-      _drawCrow(cdx, cdy, flyRight, 1);
+      _drawCrow(cdx, cdy, flyRight, 1, 'dive');
     }
     ctx.restore();
   }
@@ -2122,33 +2043,28 @@ function drawWorld() {
   // — patrol & ambush creatures —
   {
     const CWS2 = 20;
-    for (const pc of patrolCreatures) {
-      const fi = pc.animFrame ?? 0;
-      const c2 = CROW_IMGS.length; const t2 = fi % (2*c2-2); const pf = t2 < c2 ? t2 : 2*c2-2-t2;
-      const img = CROW_IMGS[pf];
-      const cdx = pc.x + CREATURE_W/2 - CWS2/2, cdy = pc.y + CREATURE_H/2 - CWS2/2;
+    function _drawCreatureCrow(cr, crState) {
+      const arr = CROW_IMGS[crState] || CROW_IMGS.idle;
+      const n = arr.length; const cycle = (n - 1) * 2;
+      const fi = cr.animFrame ?? 0; const t2 = fi % cycle;
+      const img = arr[t2 < n ? t2 : cycle - t2];
+      const cdx = cr.x + CREATURE_W/2 - CWS2/2, cdy = cr.y + CREATURE_H/2 - CWS2/2;
       ctx.globalAlpha = 1; ctx.shadowColor = '#ff6b9d'; ctx.shadowBlur = 6;
       if (img && img.complete && img.naturalWidth > 0) {
-        if (pc.facingRight) {
+        if (cr.facingRight) {
           ctx.save(); ctx.translate(cdx+CWS2, cdy); ctx.scale(-1,1);
           ctx.drawImage(img,0,0,CWS2,CWS2); ctx.restore();
         } else { ctx.drawImage(img, cdx, cdy, CWS2, CWS2); }
       } else { ctx.fillStyle='#ff6b9d'; ctx.fillRect(cdx,cdy,CREATURE_W,CREATURE_H); }
       ctx.shadowBlur=0;
     }
+    for (const pc of patrolCreatures) {
+      const s = (pc.phase === 'chase' || pc.phase === 'flyoff') ? 'dive' : 'idle';
+      _drawCreatureCrow(pc, s);
+    }
     for (const ac of ambushCreatures) {
-      const fi = ac.animFrame ?? 0;
-      const c2 = CROW_IMGS.length; const t2 = fi % (2*c2-2); const pf = t2 < c2 ? t2 : 2*c2-2-t2;
-      const img = CROW_IMGS[pf];
-      const cdx = ac.x + CREATURE_W/2 - CWS2/2, cdy = ac.y + CREATURE_H/2 - CWS2/2;
-      ctx.globalAlpha = 1; ctx.shadowColor = '#ff6b9d'; ctx.shadowBlur = 6;
-      if (img && img.complete && img.naturalWidth > 0) {
-        if (ac.facingRight) {
-          ctx.save(); ctx.translate(cdx+CWS2, cdy); ctx.scale(-1,1);
-          ctx.drawImage(img,0,0,CWS2,CWS2); ctx.restore();
-        } else { ctx.drawImage(img, cdx, cdy, CWS2, CWS2); }
-      } else { ctx.fillStyle='#ff6b9d'; ctx.fillRect(cdx,cdy,CREATURE_W,CREATURE_H); }
-      ctx.shadowBlur=0;
+      const s = (ac.phase === 'chase' || ac.phase === 'flyoff') ? 'dive' : 'idle';
+      _drawCreatureCrow(ac, s);
     }
   }
 
@@ -3024,7 +2940,7 @@ function startGame() {
   // reset boss fight state
   bossTriggered = false; bossDefeated = false; bossActive = false; bossDeathPending = false;
   resetBoss();
-  powerupTimer = 0; _blobPts = null; powerups.forEach(pu => { pu.active = true; });
+  powerupTimer = 0; powerups.forEach(pu => { pu.active = true; });
   for (const pc of patrolCreatures) _resetPatrolCreature(pc);
   for (const ac of ambushCreatures) _resetAmbushCreature(ac);
   document.getElementById('overlay').classList.add('hidden');
@@ -3273,7 +3189,8 @@ startBgFramePreload();
     ...KULLAD_IMGS,
     ...Object.values(SPRITE_IMGS).flat(),
     ...Object.values(BOSS_IMGS).flat(),
-    ...CROW_IMGS
+    ...CROW_IMGS.idle, ...CROW_IMGS.dive,
+    ...ORB_IMGS.idle, ...ORB_IMGS.moving
   ];
   const vids = ['cutsceneVid1','cutsceneVid2','cutsceneVid3']
     .map(id => document.getElementById(id));
