@@ -1647,36 +1647,34 @@ const SPRITE_H = 80;
 // Draws the powerup orb using ORB_IMGS sprite frames.
 // State: 'moving' when speed >= 0.5 world units/frame, 'idle' otherwise.
 // Called inside the 2× scaled ctx, so all coords are world units.
-const ORB_DRAW_SIZE = 40; // world units; content fills ~372/640 of each frame
-const ORB_CROP = { sx: 134, sy: 134, sw: 372, sh: 372 }; // visible content bounds
+const ORB_DRAW_SIZE = 40; // world units; full 640×640 frame used (no source crop)
 
+// Draws the orb on the player while powerup is active.
+// Always uses 'moving' animation. Flips horizontally when vx<0 so tail trails behind.
 function drawPowerupOrb(wx, wy, pw, ph, vx, vy) {
-  const speed = Math.abs(vx) + Math.abs(vy);
-  const state = speed >= 0.5 ? 'moving' : 'idle';
-  const arr = ORB_IMGS[state];
-  const n = arr.length;
-  const cycle = (n - 1) * 2;
+  const arr = ORB_IMGS.moving;
+  const n = arr.length; const cycle = (n - 1) * 2;
   const t = Math.floor(frame * 0.4) % cycle;
-  const idx = t < n ? t : cycle - t;
-  const img = arr[idx];
+  const img = arr[t < n ? t : cycle - t];
   const fadeAlpha = powerupTimer < 60 ? powerupTimer / 60 : 1;
   const cx = wx + pw / 2;
   const cy = wy + PLAYER_PHYS_H / 2;
-  const dx = cx - ORB_DRAW_SIZE / 2;
   const dy = cy - ORB_DRAW_SIZE / 2;
   ctx.save();
   ctx.globalAlpha = fadeAlpha;
-  ctx.shadowColor = '#cc44ff';
-  ctx.shadowBlur = 14;
+  ctx.shadowColor = '#cc44ff'; ctx.shadowBlur = 14;
   if (img && img.complete && img.naturalWidth > 0) {
-    const c = ORB_CROP;
-    ctx.drawImage(img, c.sx, c.sy, c.sw, c.sh, dx, dy, ORB_DRAW_SIZE, ORB_DRAW_SIZE);
+    // tail trails left by default (orb faces right); flip when moving left
+    if (vx < 0) {
+      ctx.drawImage(img, 0, 0, 640, 640, cx + ORB_DRAW_SIZE / 2, dy, -ORB_DRAW_SIZE, ORB_DRAW_SIZE);
+    } else {
+      ctx.drawImage(img, 0, 0, 640, 640, cx - ORB_DRAW_SIZE / 2, dy, ORB_DRAW_SIZE, ORB_DRAW_SIZE);
+    }
   } else {
     ctx.fillStyle = '#cc44ff';
     ctx.beginPath(); ctx.arc(cx, cy, ORB_DRAW_SIZE / 2, 0, Math.PI * 2); ctx.fill();
   }
-  ctx.shadowBlur = 0;
-  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0; ctx.globalAlpha = 1;
   ctx.restore();
 }
 
@@ -2093,26 +2091,25 @@ function drawWorld() {
     }
   }
 
-  // — powerup pickups —
-  for (const _pu of powerups) {
-    if (!_pu.active) continue;
-    const pt = (frame * 0.08) % (Math.PI * 2);
-    const pulse = 1 + Math.sin(pt) * 0.15;
-    const pr = 6 * pulse;       // radius in world units
-    const pcx = _pu.x + _pu.w / 2, pcy = _pu.y + _pu.h / 2;
-    // outer glow
-    const _pg = ctx.createRadialGradient(pcx, pcy, 0, pcx, pcy, pr * 2.5);
-    _pg.addColorStop(0, 'rgba(0,255,204,0.35)');
-    _pg.addColorStop(1, 'rgba(0,255,204,0)');
-    ctx.fillStyle = _pg;
-    ctx.beginPath(); ctx.arc(pcx, pcy, pr * 2.5, 0, Math.PI * 2); ctx.fill();
-    // core orb
-    const _pc = ctx.createRadialGradient(pcx - pr * 0.25, pcy - pr * 0.25, 0, pcx, pcy, pr);
-    _pc.addColorStop(0, '#ffffff');
-    _pc.addColorStop(0.3, '#00ffcc');
-    _pc.addColorStop(1, '#006688');
-    ctx.fillStyle = _pc;
-    ctx.beginPath(); ctx.arc(pcx, pcy, pr, 0, Math.PI * 2); ctx.fill();
+  // — powerup pickups — drawn with ORB_IMGS.idle ping-pong
+  {
+    const _on = ORB_IMGS.idle.length; const _oc = (_on - 1) * 2;
+    const _ot = Math.floor(frame * 0.4) % _oc;
+    const _oImg = ORB_IMGS.idle[_ot < _on ? _ot : _oc - _ot];
+    const _oSz = 24; // world units for pickup
+    for (const _pu of powerups) {
+      if (!_pu.active) continue;
+      const pcx = _pu.x + _pu.w / 2, pcy = _pu.y + _pu.h / 2;
+      ctx.save();
+      ctx.shadowColor = '#cc44ff'; ctx.shadowBlur = 10;
+      if (_oImg && _oImg.complete && _oImg.naturalWidth > 0) {
+        ctx.drawImage(_oImg, 0, 0, 640, 640, pcx - _oSz/2, pcy - _oSz/2, _oSz, _oSz);
+      } else {
+        ctx.fillStyle = '#cc44ff';
+        ctx.beginPath(); ctx.arc(pcx, pcy, _oSz/2, 0, Math.PI*2); ctx.fill();
+      }
+      ctx.shadowBlur = 0; ctx.restore();
+    }
   }
 
   // — player —
