@@ -2057,12 +2057,10 @@ function drawWorld() {
       ctx.shadowBlur=0;
     }
     for (const pc of patrolCreatures) {
-      const s = (pc.phase === 'chase' || pc.phase === 'flyoff') ? 'dive' : 'idle';
-      _drawCreatureCrow(pc, s);
+      _drawCreatureCrow(pc, 'dive'); // waypoint crows always fly
     }
     for (const ac of ambushCreatures) {
-      const s = (ac.phase === 'chase' || ac.phase === 'flyoff') ? 'dive' : 'idle';
-      _drawCreatureCrow(ac, s);
+      _drawCreatureCrow(ac, ac.phase === 'wait' ? 'idle' : 'dive'); // idle when waiting, dive when chasing
     }
   }
 
