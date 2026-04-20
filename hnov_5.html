@@ -1648,7 +1648,7 @@ const SPRITE_H = 80;
 // Draws the powerup orb using ORB_IMGS sprite frames.
 // State: 'moving' when speed >= 0.5 world units/frame, 'idle' otherwise.
 // Called inside the 2× scaled ctx, so all coords are world units.
-const ORB_DRAW_SIZE = 40; // world units; full 640×640 frame used (no source crop)
+const ORB_DRAW_SIZE = 80; // world units; full 640×640 frame used (no source crop)
 let _orbAngle = 0; // last known movement angle, retained when speed drops to 0
 
 // Draws the orb on the player while powerup is active.
@@ -1656,7 +1656,7 @@ let _orbAngle = 0; // last known movement angle, retained when speed drops to 0
 function drawPowerupOrb(wx, wy, pw, ph, vx, vy) {
   const arr = ORB_IMGS.moving;
   const n = arr.length; const cycle = (n - 1) * 2;
-  const t = Math.floor(frame * 0.4) % cycle;
+  const t = Math.floor(frame * 0.2) % cycle;
   const img = arr[t < n ? t : cycle - t];
   const fadeAlpha = powerupTimer < 60 ? powerupTimer / 60 : 1;
   const cx = wx + pw / 2;
@@ -2096,7 +2096,7 @@ function drawWorld() {
     const _on = ORB_IMGS.idle.length; const _oc = (_on - 1) * 2;
     const _ot = Math.floor(frame * 0.4) % _oc;
     const _oImg = ORB_IMGS.idle[_ot < _on ? _ot : _oc - _ot];
-    const _oSz = 24; // world units for pickup
+    const _oSz = 48; // world units for pickup
     for (const _pu of powerups) {
       if (!_pu.active) continue;
       const pcx = _pu.x + _pu.w / 2, pcy = _pu.y + _pu.h / 2;
