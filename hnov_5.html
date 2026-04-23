@@ -398,7 +398,6 @@ let _loadFadeStart = 0;
 (function(){ const ov = document.getElementById('overlay'); ov.style.opacity='0'; ov.style.pointerEvents='none'; ov.style.transition='opacity 0.5s'; })();
 let frame = 0;
 let winTimer = 0;
-let deathTimer = 0;
 let deadOverlayTimer = 0;
 let deathPhase = 'dying'; // 'dying' | 'fallen'
 let screenShake = 0;
@@ -472,10 +471,16 @@ const CREATURE_RAIN_SPD = 1.5;
 const BOSS_HOVER_SWAY     = 10;   // subtle sway amplitude during hover (world units)
 const BOSS_HOVER_SWAY_SPD = 0.02; // sway oscillation speed
 const BOSS_HOVER_DUR      = 1800; // total hover phase duration (30 s at 60 fps)
-const BOSS_BURST_INTERVAL = 240;  // frames between each simultaneous 3-wave burst (4 s)
-const BOSS_DASH_DRIFT_DUR = 240;  // frames of full ±150 sine drift before locking on to player
+const BOSS_BURST_INTERVAL = 240;  // frames between each simultaneous burst (4 s)
+const BOSS_DASH_DRIFT_DUR = 1800; // frames of full ±150 sine drift before locking on to player (30 s)
 const BOSS_AMBIENT_N      = 3;    // number of ambient circling creatures during hover
 const BOSS_AMBIENT_RADIUS = 40;   // orbit radius for ambient creatures (world units)
+// — drift-phase summon attacks —
+const BOSS_DRIFT_SUMMON_INT_HP3 = 480;  // frames between summon attacks at 3 HP (8 s)
+const BOSS_DRIFT_SUMMON_INT_HP2 = 300;  // 5 s
+const BOSS_DRIFT_SUMMON_INT_HP1 = 180;  // 3 s
+const BOSS_DRIFT_CROW_SPAWN_OX  = 0;   // world units from boss centre — horizontal
+const BOSS_DRIFT_CROW_SPAWN_OY  = 24;  // world units from boss centre — below
 const bossData = {
   x: BOSS_SPAWN_X - 8, y: BOSS_SPAWN_Y - 8, w: 56, h: 56,
   spawnX: BOSS_SPAWN_X - 8, spawnY: BOSS_SPAWN_Y - 8,
@@ -487,8 +492,10 @@ const bossData = {
   hitCooldown: 0,
   creatures: [],        // active attack-wave creatures (kill player on contact)
   ambientCreatures: [], // decorative circling creatures (no damage); fly off before dash phase
-  hoverTimer: BOSS_HOVER_DUR, // counts down 16s total hover duration
+  hoverTimer: BOSS_HOVER_DUR, // counts down 30 s total hover duration
   burstTimer: 0,              // counts down 4s between bursts (0 = fire burst immediately)
+  driftSummonTimer: BOSS_DRIFT_SUMMON_INT_HP3, // frames until next summon attack during drift
+  driftSummonActive: false,   // true while attack animation plays mid-drift
   // — animation state —
   animName: 'idle', animFrame: 0, animT: 0, hurtTimer: 0,
 };
@@ -1004,7 +1011,7 @@ function checkHazards() {
   for (const hg of hazardGates) {
     const active = (frame % hg.period) < hg.period/2 + hg.phase % (hg.period/2);
     const open   = (frame % hg.period) >= hg.period/2;
-    if (!open && rectsOverlap(p.x,p.y,p.w,p.h, hg.x,hg.y,hg.w,hg.h)) respawn();
+    if (!open && rectsOverlap(p.x,p.y,p.w,p.h, hg.x,hg.y,hg.w,hg.h)) { killPlayer(); return; }
   }
   // rot barriers
   for (const rb of rotBarriers) {
@@ -1012,11 +1019,10 @@ function checkHazards() {
     const by1 = rb.cy + Math.sin(rb.angle) * rb.len - 4;
     const bx2 = rb.cx - Math.cos(rb.angle) * rb.len - 4;
     const by2 = rb.cy - Math.sin(rb.angle) * rb.len - 4;
-    if (rectsOverlap(p.x,p.y,p.w,p.h, bx1,by1,8,8)) respawn();
-    if (rectsOverlap(p.x,p.y,p.w,p.h, bx2,by2,8,8)) respawn();
+    if (rectsOverlap(p.x,p.y,p.w,p.h, bx1,by1,8,8)) { killPlayer(); return; }
+    if (rectsOverlap(p.x,p.y,p.w,p.h, bx2,by2,8,8)) { killPlayer(); return; }
   }
-  // enemies — flight powerup grants invincibility against spikes/enemies
-  if (powerupTimer > 0) return;
+  // enemies
   for (const e of enemies) {
     if (playerOvalsHitRect(e.x, e.y, e.w, e.h)) {
       p.dead = true;
@@ -1027,7 +1033,6 @@ function checkHazards() {
       p.vy = 0;
       p.dashTimer = 0;
       p.dashGrace = 0;
-      deathTimer = 0;
       deathPhase = 'dying';
       gameState = 'dead';
       deadOverlayTimer = 0;
@@ -1041,7 +1046,7 @@ function killPlayer() {
   if (p.dead || godMode) return;
   p.dead = true; p.state = 'dying'; p.animFrame = 0; p.animT = 0;
   p.vx = 0; p.vy = 0; p.dashTimer = 0; p.dashGrace = 0;
-  deathTimer = 0; deathPhase = 'dying'; gameState = 'dead'; deadOverlayTimer = 0;
+  deathPhase = 'dying'; gameState = 'dead'; deadOverlayTimer = 0;
 }
 
 // — Boss animation helpers ────────────────────────────────────────────────────
@@ -1064,6 +1069,26 @@ function getBossFrame(b) {
   return (img && img.complete && img.naturalWidth > 0) ? img : null;
 }
 
+// Spawn one summon crow from the boss position toward the player, then reset the
+// drift summon timer according to current HP.
+function _spawnDriftCrow(b) {
+  const bCx = b.x + b.w / 2, bCy = b.y + b.h / 2;
+  const px = player.x + 6, py = player.y + 8;
+  const dx = px - bCx, dy = py - bCy;
+  const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+  b.creatures.push({
+    type: 'summon',
+    x: bCx + BOSS_DRIFT_CROW_SPAWN_OX - CREATURE_W / 2,
+    y: bCy + BOSS_DRIFT_CROW_SPAWN_OY - CREATURE_H / 2,
+    vx: (dx / dist) * CREATURE_CHASE_SPD,
+    vy: (dy / dist) * CREATURE_CHASE_SPD,
+  });
+  b.driftSummonActive = false;
+  b.driftSummonTimer = b.hp >= 3 ? BOSS_DRIFT_SUMMON_INT_HP3
+                     : b.hp === 2 ? BOSS_DRIFT_SUMMON_INT_HP2
+                     : BOSS_DRIFT_SUMMON_INT_HP1;
+}
+
 // Advance boss animation one game tick (called every updateBoss frame).
 // Selects the target animation from the boss phase, switches immediately on change,
 // then ticks the frame counter (30fps playback = advance every 2 game ticks).
@@ -1072,11 +1097,13 @@ function updateBossAnim(b) {
   let target;
   if (bossDeathPending)     { target = 'death'; }
   else if (b.hurtTimer > 0) { b.hurtTimer--; target = 'hurt'; }
-  else {
+  else if (b.phase === 'dashDrift') {
+    // idle normally; attack only while summon move is active
+    target = b.driftSummonActive ? 'attack' : 'idle';
+  } else {
     const phaseMap = {
       hover: 'idle',
       hover_clearambient: 'idle',
-      dashDrift: 'attack', // telegraph incoming dash
       dash: 'dash',
       pause: 'idle',
       ascend: 'idle',
@@ -1113,6 +1140,14 @@ function updateBossAnim(b) {
   } else if (b.animName === 'hurt') {
     // Play once, hold last frame until hurtTimer expires
     if (b.animFrame < N - 1) b.animFrame++;
+  } else if (b.animName === 'attack' && b.phase === 'dashDrift') {
+    // Play once during drift summon; spawn crow on last frame then return to idle
+    if (b.animFrame < N - 1) {
+      b.animFrame++;
+    } else {
+      _spawnDriftCrow(b);
+      b.animFrame = 0;
+    }
   } else {
     // Loop all other clips
     b.animFrame = (b.animFrame + 1) % N;
@@ -1129,6 +1164,8 @@ function resetBoss() {
   bossData.creatures = [];
   bossData.hoverTimer = BOSS_HOVER_DUR;
   bossData.burstTimer = 0;
+  bossData.driftSummonTimer = BOSS_DRIFT_SUMMON_INT_HP3;
+  bossData.driftSummonActive = false;
   bossData.ambientCreatures = _makeAmbientCreatures(bossData);
   bossData.animName = 'idle'; bossData.animFrame = 0; bossData.animT = 0; bossData.hurtTimer = 0;
   bossDeathPending = false;
@@ -1209,15 +1246,17 @@ function updateBoss() {
         cr.y = cr.cy + Math.sin(cr.angle + cr.phaseOffset) * cr.radius - CREATURE_H / 2;
       } else if (cr.type === 'rain') {
         cr.y += cr.vy;
+      } else if (cr.type === 'summon') {
+        cr.x += cr.vx; cr.y += cr.vy;
       } else {
         cr.x += cr.vx;
       }
-      if (!player.dead && powerupTimer === 0 &&
-          playerOvalsHitRect(cr.x, cr.y, CREATURE_W, CREATURE_H)) {
+      if (!player.dead && playerOvalsHitRect(cr.x, cr.y, CREATURE_W, CREATURE_H)) {
         killPlayer();
       }
       if (cr.type === 'circle') return cr.cvx < 0 ? cr.cx + cr.radius > 0 : cr.cx - cr.radius < LW;
       if (cr.type === 'rain') return cr.y < -1800;
+      if (cr.type === 'summon') return cr.x + CREATURE_W > -60 && cr.x < LW + 60 && cr.y + CREATURE_H > -2900 && cr.y < LH + 60;
       return cr.vx < 0 ? cr.x + CREATURE_W > 16 : cr.x < 824;
     });
   }
@@ -1246,7 +1285,7 @@ function updateBoss() {
     // Every BOSS_BURST_INTERVAL frames (4 s), fire N patterns simultaneously:
     //   3 HP → 2 patterns, 2 HP → 4 patterns, 1 HP → 6 patterns
     if (--b.burstTimer <= 0) {
-      const n = b.hp >= 3 ? 2 : b.hp === 2 ? 4 : 6;
+      const n = b.hp >= 3 ? 1 : b.hp === 2 ? 2 : 4;
       for (let i = 0; i < n; i++) _bossStartCreature(b);
       b.burstTimer = BOSS_BURST_INTERVAL;
     }
@@ -1288,11 +1327,20 @@ function updateBoss() {
     }
 
   } else if (b.phase === 'dashDrift') {
-    // Full ±150 sine drift for BOSS_DASH_DRIFT_DUR frames, then lock on and dash
+    // Full ±150 sine drift for BOSS_DASH_DRIFT_DUR frames (30 s), then lock on and dash
     b.driftAngle += 0.025;
     b.x = b.spawnX + Math.sin(b.driftAngle) * 150;
     b.y = b.spawnY;
+
+    // Summon crow attack every 8 s / 5 s / 3 s (HP 3 / 2 / 1)
+    if (!b.driftSummonActive) {
+      if (--b.driftSummonTimer <= 0) b.driftSummonActive = true;
+    }
+    // Tick any summon crows in flight
+    _tickCreatures();
+
     if (--b.phaseTimer <= 0) {
+      b.creatures = []; // clear lingering summon crows before dash
       const px = player.x + 6, py = player.y + 8;
       const bx = b.x + b.w / 2, by = b.y + b.h / 2;
       const dx = px - bx, dy = py - by;
@@ -1323,14 +1371,6 @@ function updateBoss() {
           b.hp--;
           b.hitCooldown = 45;
           b.hurtTimer = BOSS_ANIM_COUNTS.hurt * 2;
-          if (b.ambientCreatures.length > 0) {
-            const ac = b.ambientCreatures.pop();
-            const dx = ac.x - (b.x + b.w / 2), dy = ac.y - (b.y + b.h / 2);
-            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-            ac.vx = dx / dist * 8; ac.vy = dy / dist * 8;
-            b.ambientCreatures.push(ac); // keep in array as fleeing
-            ac.fleeing = true;
-          }
           spawnParticles(b.x + b.w / 2, b.y + b.h / 2, '#cd4acd', 14, 7, 7, 22);
           if (b.hp <= 0) { bossDeathPending = true; return; }
           b.phase = 'pause'; b.phaseTimer = 60;
@@ -1410,7 +1450,7 @@ function updatePatrolCreatures() {
       pc.x += pc.vx; pc.y += pc.vy;
       if (pc.x < -60 || pc.x > LW + 60 || pc.y < -2900 || pc.y > LH + 60) _resetPatrolCreature(pc);
     }
-    if (!player.dead && powerupTimer === 0 && playerOvalsHitRect(pc.x, pc.y, CREATURE_W, CREATURE_H)) killPlayer();
+    if (!player.dead && playerOvalsHitRect(pc.x, pc.y, CREATURE_W, CREATURE_H)) killPlayer();
   }
 }
 
@@ -1435,7 +1475,7 @@ function updateAmbushCreatures() {
       ac.x += ac.vx; ac.y += ac.vy;
       if (ac.x < -60 || ac.x > LW + 60 || ac.y < -2900 || ac.y > LH + 60) _resetAmbushCreature(ac);
     }
-    if (!player.dead && powerupTimer === 0 && playerOvalsHitRect(ac.x, ac.y, CREATURE_W, CREATURE_H)) killPlayer();
+    if (!player.dead && playerOvalsHitRect(ac.x, ac.y, CREATURE_W, CREATURE_H)) killPlayer();
   }
 }
 
@@ -1443,7 +1483,7 @@ function respawn() {
   const old = player;
   player = makePlayer();
   if (_customRespawn !== null) { player.x = _customRespawn.x; player.y = _customRespawn.y; }
-  if (bossDefeated) { player.x = 354; player.y = -2298; }
+  else if (bossDefeated) { player.x = 354; player.y = -2298; }
   powerupTimer = 0; powerups.forEach(pu => { pu.active = true; });
   for (const pc of patrolCreatures) _resetPatrolCreature(pc);
   for (const ac of ambushCreatures) _resetAmbushCreature(ac);
@@ -2059,7 +2099,7 @@ function drawWorld() {
       ctx.shadowBlur=0;
     }
     for (const pc of patrolCreatures) {
-      _drawCreatureCrow(pc, 'dive'); // waypoint crows always fly
+      _drawCreatureCrow(pc, pc.phase === 'patrol' ? 'idle' : 'dive');
     }
     for (const ac of ambushCreatures) {
       _drawCreatureCrow(ac, ac.phase === 'wait' ? 'idle' : 'dive'); // idle when waiting, dive when chasing
@@ -2555,7 +2595,7 @@ function drawCutscene() {
     ctx.restore();
   }
 
-  if (cutsceneFadeState !== 'out' && !cutsceneExiting) {
+  if (cutsceneFadeState === 'none' && !cutsceneExiting) {
     drawCutsceneSubtitle(CUTSCENE_SUBTITLES[cutsceneClip - 1]);
   }
 }
@@ -2654,7 +2694,7 @@ function drawBossCutscene() {
     ctx.save(); ctx.globalAlpha = fadeAlpha; ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, CW, CH); ctx.restore();
   }
 
-  if (bossCsFadeState !== 'out' && !bossCsExiting) {
+  if (bossCsFadeState === 'none' && !bossCsExiting) {
     const subs = bossCsSet === 1 ? BOSS_CS2_SUBS : BOSS_CS3_SUBS;
     drawCutsceneSubtitle(subs[bossCsClip - 1]);
   }
@@ -2923,7 +2963,6 @@ function startGame() {
   player = makePlayer();
   particles = [];
   frame = 0;
-  deathTimer = 0;
   deadOverlayTimer = 0;
   gameState = 'playing';
   cam.x = 0; cam.y = LH - CH / 2;
@@ -2984,7 +3023,6 @@ document.addEventListener('keydown', e => {
     startGame();
   }
   if (e.code === 'KeyR' && gameState === 'dead') {
-    deathTimer = 0;
     deadOverlayTimer = 0;
     deathPhase = 'dying';
     respawn();
@@ -3003,7 +3041,7 @@ canvas.addEventListener('mousedown', e => {
   if (!godMode) return;
   const { wx, wy } = _canvasToWorld(e.clientX, e.clientY);
   // 0. click on boss → deal 1 damage
-  if (bossActive) {
+  if (bossActive && !bossDeathPending) {
     const b = bossData;
     if (wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h) {
       b.hp--;
@@ -3189,7 +3227,8 @@ startBgFramePreload();
     ...CROW_IMGS.idle, ...CROW_IMGS.dive,
     ...ORB_IMGS.idle, ...ORB_IMGS.moving
   ];
-  const vids = ['cutsceneVid1','cutsceneVid2','cutsceneVid3']
+  const vids = ['cutsceneVid1','cutsceneVid2','cutsceneVid3',
+    'bossCutVid1','bossCutVid2','bossCutVid3','bossCutVid4','bossCutVid5','bossCutVid6']
     .map(id => document.getElementById(id));
   const total = imgs.length + vids.length;
   let done = 0;

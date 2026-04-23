@@ -829,7 +829,7 @@ Code identifiers (`drawHnov`, `HNOV SPRITE SYSTEM` comment, `// Hnov sprite` com
 - `bossDefeated` — true after boss death cutscene completes; chai cup reappears and win is allowed
 - `bossActive` — true while the boss fight is live (false during cutscenes, false after defeat)
 - `bossDeathPending` — true while the death animation is playing before the cutscene fires; boss rendered but gameplay logic skipped
-- `bossData` — boss entity: `{x,y,w:40,h:40,hp,maxHp,phase,phaseTimer,driftAngle,dashVx,dashVy,dashTargetX,dashTargetY,hitCooldown,creatures[],ambientCreatures[],wavesRemaining,waveTimer,animName,animFrame,animT,hurtTimer}`
+- `bossData` — boss entity: `{x,y,w:40,h:40,hp,maxHp,phase,phaseTimer,hoverTimer,burstTimer,driftSummonTimer,driftSummonActive,driftAngle,dashVx,dashVy,dashTargetX,dashTargetY,hitCooldown,creatures[],ambientCreatures[],wavesRemaining,waveTimer,animName,animFrame,animT,hurtTimer}`
 - `bossCsSet` (1=intro, 2=death), `bossCsClip`, `bossCsExiting`, `bossCsExitStart`, `bossCsFadeState`, `bossCsFadeStart`
 - `BOSS_CS2_SUBS` / `BOSS_CS3_SUBS` — subtitle text arrays for each cutscene set
 
@@ -838,15 +838,15 @@ Code identifiers (`drawHnov`, `HNOV SPRITE SYSTEM` comment, `// Hnov sprite` com
 **HOVER PHASE (`hover`)**
 - Boss floats at `y=-2525` with a subtle sway (`BOSS_HOVER_SWAY=10` world units amplitude, `BOSS_HOVER_SWAY_SPD=0.02`)
 - `BOSS_AMBIENT_N=3` decorative crow creatures orbit the boss at `BOSS_AMBIENT_RADIUS=40` world units. They rotate at `angle += 0.012` per frame and are drawn at 45% alpha. They do **not** hurt the player.
-- Every `BOSS_WAVE_INTERVAL=240` frames (4 s), one attack wave is launched via `_bossStartCreature(b)`. Attack creatures kill the player on contact (unless player is dashing).
-- Wave count before transitioning scales with HP: 3 HP → 3 waves, 2 HP → 6 waves, 1 HP → 12 waves (`wavesRemaining` field).
+- Every `BOSS_WAVE_INTERVAL=240` frames (4 s), one attack wave is launched via `_bossStartCreature(b)`. Attack creatures kill the player on contact.
+- Wave count before transitioning scales with HP: 3 HP → 1 wave, 2 HP → 2 waves, 1 HP → 4 waves (`wavesRemaining` field).
 - When `wavesRemaining === 0` and all attack creatures have despawned → ambient creatures are given outward fly-off velocity (speed 8) → transition to `hover_clearambient`.
 
 **`hover_clearambient`**
 - Ambient creatures move at their fly-off velocity until all exit the screen bounds (`x < -60 || x > LW+60 || y < -2860 || y > -2100`). Then → `dashDrift`.
 
 **DASH PHASE (`dashDrift` → `dash` → `pause` → `ascend`)**
-- `dashDrift` — boss resumes full ±150 sine drift for `BOSS_DASH_DRIFT_DUR=240` frames (4 s). Animation plays `attack` clip to telegraph the incoming dash.
+- `dashDrift` — boss drifts ±150 sine for `BOSS_DASH_DRIFT_DUR=1800` frames (30 s). During drift, summon crows attack the player on a timer: every 8 s (3 HP) / 5 s (2 HP) / 3 s (1 HP) via `BOSS_DRIFT_SUMMON_INT_HP3/HP2/HP1`. When `driftSummonTimer` reaches 0, `driftSummonActive = true`, the animation plays the full `attack` clip once, and `_spawnDriftCrow(b)` fires on the last frame (spawning a crow aimed at the player). Animation is `idle` when not summoning, `attack` (play-once) during summon.
 - `dash` — locks onto player's position at the moment drift ends and dashes at speed 4. Stops when: within 4 units of target, hits a floating platform, hits wall/floor/ceiling bounds, or 300-frame timeout.
 - Only damageable during `dash`: spike enemy collision deals −1 HP, `hitCooldown=45` prevents multi-hit. At 0 HP → `bossDeathPending = true`.
 - `pause` — 60 frames stationary.
@@ -861,6 +861,8 @@ Code identifiers (`drawHnov`, `HNOV SPRITE SYSTEM` comment, `// Hnov sprite` com
 **Pattern 2 — Spinning circle:** 4 crows at 90° intervals around a moving centre (`phaseOffset: i * PI/2`). Centre enters from one side diagonally. `{type:'circle', cx, cy, cvx, cvy, angle, phaseOffset, radius, x, y}`. Despawn when centre exits the opposite side.
 
 **Creature constants:** `CREATURE_W=17, CREATURE_H=6, CREATURE_SPEED=0.375`; `CREATURE_Y_MIN=-2580, CREATURE_Y_MAX=-2020`; `CREATURE_CIRCLE_RADIUS=35, CREATURE_CIRCLE_SPD_X=1.5, CREATURE_CIRCLE_SPD_Y=0.4, CREATURE_CIRCLE_ROT=0.055`; `CREATURE_RAIN_SPD=1.5`.
+
+**Drift-phase summon constants:** `BOSS_DASH_DRIFT_DUR=1800` (30 s total drift); `BOSS_DRIFT_SUMMON_INT_HP3=480` (8 s at full HP), `BOSS_DRIFT_SUMMON_INT_HP2=300` (5 s), `BOSS_DRIFT_SUMMON_INT_HP1=180` (3 s); `BOSS_DRIFT_CROW_SPAWN_OX=0, BOSS_DRIFT_CROW_SPAWN_OY=24` (crow spawns 24 world units below boss centre, aimed at player). `_spawnDriftCrow(b)` pushes a `{type:'summon'}` creature into `b.creatures[]` with velocity aimed at the player at moment of spawn. Summon crows use both x+y movement and despawn when out of level bounds.
 
 **Damage rules:**
 - Boss HP: 3. Only damaged by spike enemy collision **during a `dash`**.
@@ -929,7 +931,8 @@ Code identifiers (`drawHnov`, `HNOV SPRITE SYSTEM` comment, `// Hnov sprite` com
 | hover (no attack creatures) | idle (ping-pong) |
 | hover (attack creatures active) | summon |
 | hover_clearambient, pause, ascend | idle |
-| dashDrift | attack (telegraphs incoming dash) |
+| dashDrift (not summoning) | idle (ping-pong) |
+| dashDrift (driftSummonActive) | attack (play-once; spawns crow on last frame) |
 | dash | dash (flipped if dashVx < 0) |
 | bossDeathPending | death (play once, then cutscene) |
 | hurtTimer > 0 | hurt (play once) |
