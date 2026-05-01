@@ -419,7 +419,7 @@ let _editorDragPlatY0 = 0;
 let _editorExportMsg = 0;     // frames remaining to show "Exported to console"
 let _editorDragPowerupIdx = -1; // index into powerups[] being dragged, -1 = none
 let _godMouseCX = 0, _godMouseCY = 0; // mouse canvas-pixel position (updated in mousemove)
-let _playerFrozen = false;             // T toggle — locks player x/y in place
+let _playerFrozen = false;             // T toggle — locks player x/y completely in place
 
 // — patrol & ambush creatures —
 let patrolCreatures = [];   // {waypoints,x,y,vx,vy,phase,wpIdx,chaseTimer,animT,animFrame,facingRight}
@@ -561,7 +561,7 @@ function update() {
     }
     // Arrow flight overrides physics velocity for that frame; WASD/Space abilities work freely otherwise
     if (_arrowFly) { p.vx = 0; p.vy = 0; }
-    // T toggles freeze — locks player x/y each frame
+    // T toggles freeze — locks player x/y completely in place
     if (justPressed['KeyT']) _playerFrozen = !_playerFrozen;
     if (_playerFrozen) { p.vx = 0; p.vy = 0; }
     // derive mouse world position for key-based placement
@@ -2042,15 +2042,19 @@ function drawWorld() {
       return arr[t < n ? t : cycle - t];
     }
 
-    // Helper: draw one crow sprite at world position (cdx, cdy), flipped if flyRight
-    function _drawCrow(cdx, cdy, flyRight, alpha, state) {
+    // Helper: draw one crow sprite at world position (cdx, cdy)
+    // flyRight: flip horizontally; headDown: flip vertically (nose-down dive)
+    function _drawCrow(cdx, cdy, flyRight, alpha, state, headDown) {
       const crowFrame = _getCrowFrame(state || 'idle');
       ctx.globalAlpha = alpha;
       ctx.shadowColor = '#ff6b9d'; ctx.shadowBlur = 6;
       if (crowFrame && crowFrame.complete && crowFrame.naturalWidth > 0) {
-        if (flyRight) {
-          ctx.save(); ctx.translate(cdx + CWS, cdy); ctx.scale(-1, 1);
-          ctx.drawImage(crowFrame, 0, 0, CWS, CWS); ctx.restore();
+        if (flyRight || headDown) {
+          ctx.save();
+          ctx.translate(cdx + (flyRight ? CWS : 0), cdy + (headDown ? CWS : 0));
+          ctx.scale(flyRight ? -1 : 1, headDown ? -1 : 1);
+          ctx.drawImage(crowFrame, 0, 0, CWS, CWS);
+          ctx.restore();
         } else {
           ctx.drawImage(crowFrame, cdx, cdy, CWS, CWS);
         }
@@ -2075,7 +2079,8 @@ function drawWorld() {
       const cdx = cr.x + CREATURE_W / 2 - CWS / 2;
       const cdy = cr.y + CREATURE_H / 2 - CWS / 2;
       const flyRight = cr.type === 'circle' ? cr.cvx > 0 : cr.type === 'rain' ? false : cr.vx > 0;
-      _drawCrow(cdx, cdy, flyRight, 1, 'dive');
+      const headDown = cr.type === 'rain' || (cr.type === 'circle' ? cr.cvy > 0 : cr.type === 'summon' ? cr.vy > 0 : false);
+      _drawCrow(cdx, cdy, flyRight, 1, 'dive', headDown);
     }
     ctx.restore();
   }
