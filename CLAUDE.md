@@ -442,9 +442,13 @@ With these changes `animFrame` 0 → `bounce/2.png`, `animFrame` 1 → `bounce/3
 
 **Subtitles:** `drawCutsceneSubtitle(text)` draws a canvas box matching the title screen overlay style: `background:#0d0d1e`, inner border `2px solid #6a5acd`, outer border `1px solid #3a2a6e` offset 8px, text `#9a8acd` `30px "Courier New"`. Box is centred horizontally, 60px from canvas bottom.
 
-## Wall Grab Charge System — REMOVED
+## Wall Grab Charge System
 
-All wall grab limits removed. Wall grab now works indefinitely with no charge count and no meter drain. `wallCharges`, `wallMeter` removed from `makePlayer()`. Wall meter block replaced with just `p.prevWallContact = p.wallContact`. HUD GRAB dots and WALL meter bar removed.
+Wall grab is limited by two independent resources: **charges** (how many separate wall grabs per air) and **meter** (how long each grab lasts).
+
+- `wallCharges: 2` — consumed on each fresh wall contact (`!prevWallContact`). If 0, the contact is cancelled immediately. Reset to 2 on landing.
+- `wallMeter: 100` — drains `1/3` per frame while on the wall (~5 s to empty). At 0, wall contact is cancelled. Recharges `+2` per frame while on the ground (~0.8 s to full).
+- HUD: WALL meter bar (`#wallMeter` / `#wallFill`) and GRAB dots (`#wpip0`, `#wpip1`) in `#abilityBar`.
 
 ## Floor Visual — Building Parapet Strip
 
@@ -490,15 +494,15 @@ All wall grab limits removed. Wall grab now works indefinitely with no charge co
 
 **Position notes:** Position is tunable — adjust `p.x` offset for left/right placement relative to the wall hitbox. Position was not finalized at implementation time.
 
-## Dash, Float, Wall Grab — Unlimited
+## Dash, Float, Wall Grab — Resource Limits
 
-All three mechanics have no limits, cooldowns, or resource costs. Removed from `makePlayer()`: `dashCount`, `floatMeter`, `wallMeter`, `wallCharges`. Removed HUD elements: DASH pips, GRAB pips, FLOAT meter bar, WALL meter bar. `#abilityBar` hidden via `display:none`.
+All three abilities are limited by resources that reset on landing.
 
-**Dash:** `p.dashTimer === 0` guard retained so rapid double-tap doesn't interrupt an active dash. No per-use decrement.
+**Dash:** `dashCount: 2` — consumed on each use (`p.dashCount--`). Guarded by `p.dashCount > 0 && p.dashTimer === 0`. Reset to 2 on landing. HUD: DASH pips (`#pip0`, `#pip1`) in `#abilityBar`; pip state is `charging` (pink) when depleted on ground, `used` (dark) when depleted in air.
 
-**Float:** S toggles `p.floating` on/off with no drain. Landing still disables float.
+**Float:** `floatMeter: 100` — drains `1/3` per frame while floating (~5 s to empty). Toggle-on is blocked when `floatMeter === 0`. At 0 mid-float, float is cancelled. Recharges `+2` per frame while on the ground (~0.8 s to full). HUD: FLOAT meter bar (`#floatMeter` / `#floatFill`) in `#hudLeft`.
 
-**Wall grab:** Meter block removed entirely; wall contact is unlimited. `prevWallContact` retained for fresh-contact detection (used by wall-jump logic).
+**Wall grab:** See "Wall Grab Charge System" above.
 
 ## Spike Strip Enemy Visual
 
